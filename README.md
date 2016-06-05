@@ -73,12 +73,16 @@ Carliv Touch Recovery specific flags:
 - `BOARD_USE_PROTOCOL_TYPE_B := true`
 
 For system.prop from device tree:
-`# system.prop for mx
+
+```
+# system.prop for mx
 #
 ro.ctr.crypto.passwd="64656661756c745f70617373776f7264"
 ro.ctr.forbid_format=/frp,/persistent,/lk,/uboot,/logo,/metadata,/nvdata,/nvram,/secro,/metadata
 ro.ctr.forbid_mount=/frp,/persistent,/lk,/uboot,/logo,/metadata,/nvdata,/nvram,/secro,/metadata
-ro.ctr.touch_accuracy=7`
+ro.ctr.touch_accuracy=7
+
+```
 
 - to use decrypt data specify here your password *(ro.ctr.crypto.passwd)*; I forgot to mention that if the phone uses encryption, the recovery will start with few seconds delay, because of the decrypting and mounting data process. If the message will tell you that couldn't be decrypted it is possible that your password was wrong or it uses an unsuported type of password. To be sure just restart the recovery from *Power menu* and if you still get the same message then you need to check your provided password from system.prop or to find a different solution (other recovery like twrp). If you want to decrypt your phone for good you need to format data and  data media from *Mount/Storage menu* but you will loose your data (settings, preferences).
 - *ro.ctr.forbid_format* and *ro.ctr.forbid_mount* are for partitions from fstab that you don't want to be shown in *Mount/ Storage menu* with mount and format option (coma separated, no spaces and with leading slash), like in my example above.
@@ -89,7 +93,9 @@ Carliv Touch Recovery uses a fstab version 1 named *ctr.fstab* and you have to c
 `recovery/root/etc/ctr.fstab`
 That will be enough since the compiler will add it in recovery ramdisk and the recovery module will find it in etc folder.
 
-`
+
+```
+
 # mount point	fstype    device    	[device2]    fs_options    [fs_options2]    lun
 
 /boot			emmc	/dev/block/platform/mtk-msdc.0/by-name/boot
@@ -98,7 +104,10 @@ That will be enough since the compiler will add it in recovery ramdisk and the r
 /system			ext4	/dev/block/platform/mtk-msdc.0/by-name/system
 /data			ext4	/dev/block/platform/mtk-msdc.0/by-name/userdata
 /internal_sd	datamedia	/dev/null
-/sdcard			vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1   lun=sys/class/android_usb/android0/f_mass_storage/lun/file`
+/sdcard			vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1   lun=sys/class/android_usb/android0/f_mass_storage/lun/file
+
+```
+
 
 Important here is how you define internal storage which is data media
 `/internal_sd	   datamedia	/dev/null`
