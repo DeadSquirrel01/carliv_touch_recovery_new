@@ -89,7 +89,7 @@ All these system.prop lines are not mandatory.
 Carliv Touch Recovery uses a fstab version 1 named *ctr.fstab* and you have to create a folder *recovery* in your device tree, in that recovery folder create a new folder named *root*, in root folder another folder named *etc* and in that one place the *ctr.fstab*. Like this:
 `recovery/root/etc/ctr.fstab`
 That will be enough since the compiler will add it in recovery ramdisk and the recovery module will find it in etc folder.
-```
+```# 
 # Android fstab file.
 # The filesystem that contains the filesystem checker binary (typically /system) cannot
 # specify MF_CHECK, and must come before any filesystems that do specify MF_CHECK
