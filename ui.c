@@ -1153,7 +1153,7 @@ static int get_touch_accuracy() {
 	char defined_touch[PROPERTY_VALUE_MAX];
 	char tmp[4];
 	
-	property_get("ro.cwm.touch_accuracy", defined_touch, "error");
+	property_get("ro.ctr.touch_accuracy", defined_touch, "error");
 	if (strcmp(defined_touch, "error") == 0) {
 		touch_accuracy = 7;
 		return 0;		
@@ -1559,27 +1559,6 @@ void ui_init(void) {
         gInstallationOverlay = NULL;
     }
 
-    /*char enable_key_repeat[PROPERTY_VALUE_MAX];
-    property_get("ro.cwm.enable_key_repeat", enable_key_repeat, "");
-    if (!strcmp(enable_key_repeat, "true") || !strcmp(enable_key_repeat, "1")) {
-        boardEnableKeyRepeat = 1;
-
-        char key_list[PROPERTY_VALUE_MAX];
-        property_get("ro.cwm.repeatable_keys", key_list, "");
-        if (strlen(key_list) == 0) {
-            boardRepeatableKeys[boardNumRepeatableKeys++] = KEY_UP;
-            boardRepeatableKeys[boardNumRepeatableKeys++] = KEY_DOWN;
-            boardRepeatableKeys[boardNumRepeatableKeys++] = KEY_VOLUMEUP;
-            boardRepeatableKeys[boardNumRepeatableKeys++] = KEY_VOLUMEDOWN;
-        } else {
-            char *pch = strtok(key_list, ",");
-            while (pch != NULL) {
-                boardRepeatableKeys[boardNumRepeatableKeys++] = atoi(pch);
-                pch = strtok(NULL, ",");
-            }
-        }
-    }*/
-
     pthread_t t;
     pthread_create(&t, NULL, progress_thread, NULL);
     pthread_create(&t, NULL, input_thread, NULL);
@@ -1772,7 +1751,7 @@ int ui_start_menu(const char** headers, char** items, int initial_selection) {
         }
 
         if (gShowBackButton && !ui_root_menu) {
-            strcpy(menu[i], " - <<-  Go Back   ");
+            strcpy(menu[i], " - <<<<  Go Back  <<<<");
             ++i;
         }
 

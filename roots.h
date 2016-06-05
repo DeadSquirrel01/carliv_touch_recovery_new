@@ -47,6 +47,7 @@ int format_volume(const char* volume);
 int use_migrated_storage();
 char* get_primary_storage_path();
 char* get_extra_storage_path();
+char* get_usb_storage_path();
 char* get_android_secure_path();
 
 int get_num_volumes();

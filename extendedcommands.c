@@ -153,11 +153,6 @@ void toggle_loki_support() {
 }
 #endif
 
-//=========================================/
-//=       Toggle md5 and vibrations       =/
-//=               carliv@xda              =/
-//=========================================/
-
 void toggle_md5_check() {
     md5_check_enabled = !md5_check_enabled;
     ui_print("md5 Check: %s\n", md5_check_enabled ? "Enabled" : "Disabled");
@@ -167,12 +162,6 @@ void toggle_vibration() {
     vibration_enabled = !vibration_enabled;
     ui_print("Vibrate on touch: %s\n", vibration_enabled ? "Enabled" : "Disabled");
 }
-
-//=========================================/
-//=        Power menu inspired from       =/
-//=     Cannibal Open Touch Recovery      =/
-//=     reworked and improved by carliv   =/
-//=========================================/
 
 #define POWER_ITEM_RECOVERY	    0
 #define POWER_ITEM_BOOTLOADER   1
@@ -268,11 +257,13 @@ int install_zip(const char* packagefilepath) {
 #define ITEM_MULTI_ZIP        3
 #define ITEM_SIG_CHECK        4
 #define ITEM_CHOOSE_ZIP_INT   5
+#define ITEM_CHOOSE_ZIP_USB   6
 
 void show_install_update_menu() {
 	struct stat upd;
     char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
+    char* usb_path = get_usb_storage_path();
     
     const char* headers[] = { "Install from zip file", NULL };
     
@@ -282,11 +273,14 @@ void show_install_update_menu() {
                                     "Multi-zip Installer",
                                     "Toggle Signature Verification",
                                     NULL,
+                                    NULL,
                                     NULL 
     };
 
     if (extra_path != NULL)
-        install_menu_items[5] = "Choose zip from ExtraSD";   
+        install_menu_items[5] = "Choose zip from ExtraSD";
+	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0)
+        install_menu_items[6] = "Choose zip from USB-Drive";
     
     for (;;)
     {
@@ -318,16 +312,16 @@ void show_install_update_menu() {
                 if (extra_path != NULL)
                     show_choose_zip_menu(extra_path);
                 break;
+            case ITEM_CHOOSE_ZIP_USB:
+                if (usb_path != NULL)
+                    show_choose_zip_menu(usb_path);
+                break;
             default:
                 return;
         }
 
     }
 }
-
-//=========================================/
-//=        Wipe menu by carliv@xda        =/
-//=========================================/
 
 void wipe_battery_stats(int confirm) {
 	if (confirm && !confirm_selection( "Confirm reset battery stats?", "Yes - Reset battery stats"))
@@ -992,6 +986,20 @@ int confirm_selection(const char* title, const char* confirm) {
     return ret;
 }
 
+static int exec_cmd(const char* path, char* const argv[]) {
+    int status;
+    pid_t child;
+    if ((child = vfork()) == 0) {
+        execv(path, argv);
+        _exit(-1);
+    }
+    waitpid(child, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        printf("%s failed with status %d\n", path, WEXITSTATUS(status));
+    }
+    return WEXITSTATUS(status);
+}
+
 extern struct selabel_handle *sehandle;
 int format_device(const char *device, const char *path, const char *fs_type) {
 	
@@ -1059,31 +1067,44 @@ int format_device(const char *device, const char *path, const char *fs_type) {
         }
         return 0;
     }
-
+    
+	int result;
+	ssize_t length = 0;
+	if (v->length != 0) length = v->length;
     if (strcmp(fs_type, "ext4") == 0) {
-        int length = 0;
-        if (strcmp(v->fs_type, "ext4") == 0) {
-            // Our desired filesystem matches the one in fstab, respect v->length
-            length = v->length;
-        }
-
-        int result = make_ext4fs(device, length, v->mount_point, sehandle);
+        result = make_ext4fs(device, length, v->mount_point, sehandle);
         if (result != 0) {
             LOGE("format_volume: make_ext4fs failed on %s\n", device);
             return -1;
         }
         return 0;
     }
-#ifdef USE_F2FS
-    if (strcmp(fs_type, "f2fs") == 0) {
-        char* args[] = { "mkfs.f2fs", v->device };
-        if (make_f2fs_main(2, args) != 0) {
-            LOGE("format_volume: mkfs.f2fs failed on %s\n", v->device);
+
+    if (strcmp(v->fs_type, "f2fs") == 0) {
+        char bytes_reserved[20], num_sectors[20];
+		const char* f2fs_argv[6] = {"mkfs.f2fs", "-t1"};
+		if (length < 0) {
+			snprintf(bytes_reserved, sizeof(bytes_reserved), "%zd", -length);
+			f2fs_argv[2] = "-r";
+			f2fs_argv[3] = bytes_reserved;
+			f2fs_argv[4] = v->device;
+			f2fs_argv[5] = NULL;
+		} else {
+			/* num_sectors can be zero which mean whole device space */
+			snprintf(num_sectors, sizeof(num_sectors), "%zd", length / 512);
+			f2fs_argv[2] = v->device;
+			f2fs_argv[3] = num_sectors;
+			f2fs_argv[4] = NULL;
+		}
+		const char *f2fs_path = "/sbin/mkfs.f2fs";
+
+		result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
+        if (result != 0) {
+            LOGE("format_volume: make f2fs failed on %s\n", v->device);
             return -1;
         }
         return 0;
     }
-#endif
 
     return format_unknown_device(device, path, fs_type);
 }
@@ -1178,7 +1199,7 @@ typedef struct {
 static int is_safe_to_format(const char* name) {
     char str[256];    
     char* partition;
-    property_get("ro.cwm.forbid_format", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
+    property_get("ro.ctr.forbid_format", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
 
 	if (is_encrypted_data()) strncat(str, ",/data", 6);
 
@@ -1196,7 +1217,7 @@ static int is_safe_to_format(const char* name) {
 static int is_allowed_to_mount(const char* name) {
     char str[256];
     char* partition;
-    property_get("ro.cwm.forbid_mount", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
+    property_get("ro.ctr.forbid_mount", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
 
     partition = strtok(str, ", ");
     while (partition != NULL) {
@@ -1244,7 +1265,7 @@ void show_partition_menu() {
                 mount_menu[mountable_volumes].v = &device_volumes[i];
                 ++mountable_volumes;
             }
-            if (strcmp("datamedia", v->fs_type) != 0 && is_safe_to_format(v->mount_point)) {
+            if (is_safe_to_format(v->mount_point)) {
                 sprintf(format_menu[formatable_volumes].txt, "Format %s", v->mount_point);
                 format_menu[formatable_volumes].v = &device_volumes[i];
                 ++formatable_volumes;
@@ -1368,12 +1389,6 @@ void show_partition_menu() {
     free(format_menu);
 }
 
-//=========================================/
-//=  Advanced backup menu inspired from   =/
-//=     Cannibal Open Touch Recovery      =/
-//=    reworked and adapted by carliv     =/
-//=========================================/
-
 static int show_nandroid_advanced_backup_menu(const char* path) {
     if (ensure_path_mounted(path) != 0) {
         LOGE("Can't mount %s\n", path);
@@ -1459,11 +1474,6 @@ static int show_nandroid_advanced_backup_menu(const char* path) {
 	
 	return ret; 	
 }
-
-//=========================================/
-//=         Advanced restore menu         =/
-//=    reworked and adapted by carliv     =/
-//=========================================/
 
 static int show_nandroid_advanced_restore_menu(const char* path) {
     if (ensure_path_mounted(path) != 0) {
@@ -1841,11 +1851,6 @@ static void choose_default_backup_format() {
     }
 }
 
-//=========================================/
-//= Advanced backup/restore, original work=/
-//=             of carliv@xda             =/
-//=========================================/
-
 static void show_nandroid_advanced_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
@@ -2028,6 +2033,102 @@ void show_nandroid_menu() {
     }
 }
 
+static int flash_image_menu(const char* path) {
+    if (ensure_path_mounted(path) != 0) {
+        LOGE("Can't mount %s\n", path);
+        return 0;
+    }
+
+	const char* advancedheaders[] = { "Choose the folder that contain",
+									 "your images. The next menu will",
+									 "show you selection options.",
+									 NULL };
+    
+    char tmp[PATH_MAX];
+    sprintf(tmp, "%s/", path);
+    char* file = choose_file_menu(tmp, NULL, advancedheaders);
+    if (file == NULL)
+        return 0;
+
+    const char* headers[] = { "Flash Image menu", "", "Select image(s) to flash:", NULL };
+    
+    int flash_img[4];
+    char* img_item[4];
+    
+    flash_img[0] = 0;
+    flash_img[1] = 0;
+    flash_img[2] = 0;   
+    
+    img_item[3] = NULL;
+    
+    int cont = 1;
+    int ret = 0;
+    for (;cont;) {
+		if (flash_img[0] == 0)
+			img_item[0] = "Select boot:    ";
+		else
+			img_item[0] = "Flash boot: (+)";
+	    	
+	    if (flash_img[1] == 0)
+    		img_item[1] = "Select recovery:    ";
+	    else
+	    	img_item[1] = "Flash recovery: (+)";
+    	if (flash_img[2] == 0)
+	    	img_item[2] = "Start Flashing";
+	    	
+	    int chosen_item = get_menu_selection(headers, img_item, 0, 0);
+	    if (chosen_item == GO_BACK)
+            break;
+	    switch (chosen_item) {
+			case 0: 
+			flash_img[0] = !flash_img[0];			
+				continue;
+			case 1:
+			flash_img[1] = !flash_img[1];
+				continue;	
+		   
+			case 2: cont = 0;
+				break;
+		}
+	}
+    
+    if (!cont) {
+		ret = ctr_flash_image(file, flash_img[0], flash_img[1]);	
+	}
+	
+	return ret; 	
+}
+
+static void show_flash_image_menu() {
+	char* primary_path = get_primary_storage_path();
+    char* extra_path = get_extra_storage_path();
+    
+    const char* headers[] = {  "Flash Images from", NULL };
+
+    static char* list[] = { "SDcard",
+                            NULL,
+                            NULL
+    };
+
+    if (extra_path != NULL)
+        list[1] = "ExtraSD";
+
+    for (;;) {
+        int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
+        if (chosen_item == GO_BACK)
+            break;
+        switch (chosen_item)
+        {
+            case 0:
+                flash_image_menu(primary_path);
+                break;
+            case 1:
+                flash_image_menu(extra_path);
+                break;
+        }
+    }
+}
+
 int can_partition(const char* volume) {
     Volume *vol = volume_for_path(volume);
     if (vol == NULL) {
@@ -2125,11 +2226,6 @@ static void partition_sdcard(char* volume) {
         ui_print("An error occured while partitioning your SD Card. Please see /tmp/recovery.log for more details.\n");
 }
 
-//=========================================/
-//=     Rainbow toggle, original work     =/
-//=             of carliv@xda             =/
-//=========================================/
-
 void toggle_rainbow() {
     ui_get_rainbow_mode = !ui_get_rainbow_mode;
     ui_print("Rainbow Mode: %s\n", ui_get_rainbow_mode ? "Enabled" : "Disabled");
@@ -2138,7 +2234,7 @@ void toggle_rainbow() {
 //=========================================/
 //=      Aroma menu, original work        =/
 //=           of sk8erwitskil             =/
-//=  reworked for lollipop by carliv@xda  =/
+//=        adapted by carliv@xda          =/
 //=========================================/
 
 static void choose_aromafm_menu(const char* aromafm_path) {
@@ -2207,11 +2303,6 @@ static int default_aromafm(const char* aromafm_path) {
 	return 0;
 }
 
-//=========================================/
-//=       Carliv menu, original work      =/
-//=             of carliv@xda             =/
-//=========================================/
-
 void show_carliv_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
@@ -2222,11 +2313,12 @@ void show_carliv_menu() {
 							"Reset Battery Stats",
 							"About",
 							"Turn on/off Rainbow mode",
+							"Flash boot or recovery images",
 							NULL,
 							NULL
     };
 #ifdef BOARD_HAS_MTK_CPU
-		carliv_list[4] = "Special MTK Partitions menu";
+		carliv_list[5] = "Special MTK Partitions menu";
 #endif    
 
     for (;;)
@@ -2268,9 +2360,12 @@ void show_carliv_menu() {
                 break;                  
              case 3:
                 toggle_rainbow();
+				break;                  
+             case 4:
+                show_flash_image_menu();
 				break;             
 #ifdef BOARD_HAS_MTK_CPU
-			case 4:
+			case 5:
                 show_mtk_special_backup_restore_menu();
                 break;
 #endif				
@@ -2391,6 +2486,10 @@ static void create_fstab() {
          write_fstab_root("/sd-ext", file);
     if (volume_for_path("/external_sd") != NULL)
          write_fstab_root("/external_sd", file);
+    if (volume_for_path("/usb-otg") != NULL)
+         write_fstab_root("/usb-otg", file);
+    if (volume_for_path("/usbdisk") != NULL)
+         write_fstab_root("/usbdisk", file);
     fclose(file);
     LOGI("Completed outputting fstab.\n");
 }
@@ -2475,44 +2574,20 @@ int verify_root_and_recovery() {
 
     ui_set_background(BACKGROUND_ICON_CLOCKWORK);
     int ret = 0;
-    struct stat st;
-    // check to see if install-recovery.sh is going to clobber recovery
-    // install-recovery.sh is also used to run the su daemon on stock rom for 4.3+
-    // so verify that doesn't exist...
-    if (0 != lstat("/system/etc/.installed_su_daemon", &st)) {
-        // check install-recovery.sh exists and is executable
-	    if (0 == lstat("/system/recovery-from-boot.p", &st)) {
-	        ui_show_text(1);
-	        ret = 1;
-	        if (confirm_selection("ROM may flash stock recovery. Fix?", "Yes - Disable recovery flash")) {
-	            __system("rm -f /system/recovery-from-boot.p");
-	            __system("chmod -x /system/etc/install-recovery.sh");
+    struct stat root;
+
+    if (lstat("/system/etc/.installed_su_daemon", &root) != 0) {
+	    if (lstat("/system/recovery-from-boot.p", &root) == 0) {
+			if (root.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) {
+		        ui_show_text(1);		        
+		        if (confirm_selection("ROM may flash stock recovery. Fix?", "Yes - Disable recovery flash")) {
+		            __system("rm -f /system/recovery-from-boot.p");
+		            __system("chmod -x /system/etc/install-recovery.sh");
+		            ret = 1;
+				}
 	        }
 	    }
 	}
-    
-    int exists = 0;
-    if (0 == lstat("/system/xbin/su", &st) || 0 == lstat("/system/bin/su", &st)) {
-        exists = 1;
-    }
-
-    if ((!exists) || 0 != lstat("/system/etc/.installed_su_daemon", &st) || 0 != lstat("/system/etc/.no-root-message", &st)) {
-        ui_show_text(1);
-        ret = 1;
-        ui_print("\n\n\n\n\n\n\n\n\n\n\nNo root enabled in your system\n");
-        ui_print("\nYou may want to flash a root solution\n");
-        ui_print("\nlike Chainfire SuperSU zip.\n");
-        ui_print("\nWould you like to turn off this message?\n");
-        ui_print("\nUse the above input!\n\n\n\n");
-        if (confirm_selection("Turn off this message about root?", "Yes.")) {
-			__system("touch /system/etc/.no-root-message");          
-            ui_print("\n\nDone! No more  missing root messages.\n\n");
-            ui_print("Press any key to reboot...\n");
-            ui_wait_key();
-        }
-        ui_show_text(0);
-    }
-
     ensure_path_unmounted("/system");
     return ret;
 }

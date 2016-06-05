@@ -134,7 +134,13 @@ service adbd /sbin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
     socket adbd stream 660 system system
     seclabel u:r:adbd:s0
 
-# setup_adbd will start adb once it has checked the keys
+service vold /sbin/minivold
+    socket vold stream 0660 root mount
+    ioprio be 2
+    setenv BLKID_FILE /tmp/vold_blkid.tab
+    seclabel u:r:vold:s0
+
+# Always start adbd on userdebug and eng builds
 on property:ro.debuggable=1
     setprop service.adb.root 1
     start setup_adbd

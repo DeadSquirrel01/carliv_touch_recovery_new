@@ -2,20 +2,17 @@ ifdef project-path-for
     ifeq ($(call my-dir),$(call project-path-for,recovery))
         RECOVERY_PATH_SET := true
         BOARD_SEPOLICY_DIRS += $(call project-path-for,recovery)/sepolicy
+        BOARD_SEPOLICY_UNION += ctr.te
     endif
 else
     ifeq ($(call my-dir),bootable/recovery)
         RECOVERY_PATH_SET := true
         BOARD_SEPOLICY_DIRS += bootable/recovery/sepolicy
+        BOARD_SEPOLICY_UNION += ctr.te
     endif
 endif
 
-
 ifeq ($(RECOVERY_PATH_SET),true)
-
-ifneq (,$(filter $(PLATFORM_SDK_VERSION), 21 22))
-    BOARD_SEPOLICY_UNION += ctr.te
-endif
 
 LOCAL_PATH := $(call my-dir)
 
@@ -48,26 +45,12 @@ LOCAL_SRC_FILES += \
 	../../system/vold/vdc.c
 endif
 
-ifeq ($(TARGET_RECOVERY_INITRC),)
-ifeq ($(BOARD_INCLUDE_CRYPTO), true)
-	TARGET_RECOVERY_INITRC := $(LOCAL_PATH)/etc/crypto/init.rc
-else
-	TARGET_RECOVERY_INITRC := $(LOCAL_PATH)/etc/init.rc
-endif
-endif
-
 ADDITIONAL_RECOVERY_FILES := $(shell echo $$ADDITIONAL_RECOVERY_FILES)
 LOCAL_SRC_FILES += $(ADDITIONAL_RECOVERY_FILES)
 
 LOCAL_MODULE := recovery
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true
-
-ifeq ($(TARGET_USERIMAGES_USE_F2FS),true)
-ifeq ($(HOST_OS),linux)
-LOCAL_REQUIRED_MODULES := mkfs.f2fs
-endif
-endif
 
 # We will allways refer and give credits here to  Koushik Dutta who made this possible in 
 # the first place!
@@ -78,7 +61,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.1
+RECOVERY_VERSION := $(RECOVERY_NAME) v5.2
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -86,6 +69,8 @@ LOCAL_CFLAGS += -DRECOVERY_API_VERSION=$(RECOVERY_API_VERSION)
 LOCAL_CFLAGS += -Wl,--no-fatal-warnings
 LOCAL_CFLAGS += -Wno-unused-parameter
 LOCAL_CFLAGS += -Wno-sign-compare
+
+LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
 
 ifndef BOARD_USE_CUSTOM_RECOVERY_FONT
 ifdef DEVICE_RESOLUTION
@@ -150,7 +135,8 @@ BOARD_RECOVERY_CHAR_HEIGHT := $(shell echo $(BOARD_USE_CUSTOM_RECOVERY_FONT) | c
 RECOVERY_BUILD_DATE := $(shell date +"%Y-%m-%d")
 RECOVERY_BUILD_USER := $(shell whoami)
 RECOVERY_BUILD_HOST := $(shell hostname)
-LOCAL_CFLAGS += -DBOARD_RECOVERY_CHAR_WIDTH=$(BOARD_RECOVERY_CHAR_WIDTH) -DBOARD_RECOVERY_CHAR_HEIGHT=$(BOARD_RECOVERY_CHAR_HEIGHT) -DRECOVERY_BUILD_DATE="$(RECOVERY_BUILD_DATE)" -DRECOVERY_BUILD_USER="$(RECOVERY_BUILD_USER)" -DRECOVERY_BUILD_HOST="$(RECOVERY_BUILD_HOST)"
+RECOVERY_BUILD_OS := $(PLATFORM_VERSION)
+LOCAL_CFLAGS += -DBOARD_RECOVERY_CHAR_WIDTH=$(BOARD_RECOVERY_CHAR_WIDTH) -DBOARD_RECOVERY_CHAR_HEIGHT=$(BOARD_RECOVERY_CHAR_HEIGHT) -DRECOVERY_BUILD_DATE="$(RECOVERY_BUILD_DATE)" -DRECOVERY_BUILD_USER="$(RECOVERY_BUILD_USER)" -DRECOVERY_BUILD_HOST="$(RECOVERY_BUILD_HOST)" -DRECOVERY_BUILD_OS="$(RECOVERY_BUILD_OS)"
 
 BOARD_RECOVERY_DEFINES := BOARD_HAS_NO_SELECT_BUTTON BOARD_UMS_LUNFILE BOARD_RECOVERY_ALWAYS_WIPES BOARD_RECOVERY_HANDLES_MOUNT RECOVERY_EXTEND_NANDROID_MENU TARGET_USE_CUSTOM_LUN_FILE_PATH TARGET_DEVICE TARGET_RECOVERY_FSTAB BOARD_HAS_MTK_CPU CUSTOM_BATTERY_FILE CUSTOM_BATTERY_STATS_PATH BOARD_NEEDS_MTK_GETSIZE BOARD_USE_PROTOCOL_TYPE_B RECOVERY_TOUCHSCREEN_FLIP_X RECOVERY_TOUCHSCREEN_FLIP_Y RECOVERY_TOUCHSCREEN_SWAP_XY
 
@@ -216,13 +202,10 @@ LOCAL_C_INCLUDES += external/openssl/include
 LOCAL_STATIC_LIBRARIES += libmake_ext4fs libext4_utils_static libz liblz4-static libreboot_static libsparse_static
 LOCAL_STATIC_LIBRARIES += libminipigz libsdcard libfsck_msdos
 
-ifeq ($(TARGET_USERIMAGES_USE_F2FS), true)
-LOCAL_CFLAGS += -DUSE_F2FS
 LOCAL_STATIC_LIBRARIES += libf2fs_fmt
-endif
 LOCAL_STATIC_LIBRARIES += libminzip libunz libmincrypt
 
-LOCAL_STATIC_LIBRARIES += libminizip libminadbd libedify libbusybox libmkyaffs2image libunyaffs liberase_image libdump_image libflash_image libfusesideload
+LOCAL_STATIC_LIBRARIES += libminizip libminadbd libedify libbusybox libmkyaffs2image libunyaffs liberase_image libdump_image libflash_image libfusesideload libmksh_ctr
 LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
 
 LOCAL_STATIC_LIBRARIES += libcrypto_static libcrecovery libflashutils libmtdutils libmmcutils libbmlutils
@@ -257,13 +240,9 @@ endif
 LOCAL_C_INCLUDES += system/extras/ext4_utils
 LOCAL_C_INCLUDES += external/openssl/include
 
-LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
-
 RECOVERY_LINKS := bu make_ext4fs edify busybox flash_image dump_image mkyaffs2image unyaffs erase_image nandroid reboot volume setprop getprop start stop minizip setup_adbd fsck_msdos newfs_msdos sdcard pigz
 
-ifeq ($(TARGET_USERIMAGES_USE_F2FS), true)
 RECOVERY_LINKS += mkfs.f2fs fsck.f2fs
-endif
 
 ifeq ($(TARGET_USES_EXFAT),true)
 RECOVERY_LINKS += fsck.exfat mkfs.exfat
@@ -402,6 +381,7 @@ include $(commands_recovery_local_path)/minui/Android.mk
 include $(commands_recovery_local_path)/devices/Android.mk
 include $(commands_recovery_local_path)/minzip/Android.mk
 include $(commands_recovery_local_path)/minadbd/Android.mk
+include $(commands_recovery_local_path)/mkshctr/Android.mk
 include $(commands_recovery_local_path)/yaffsc/Android.mk
 include $(commands_recovery_local_path)/mtdutils/Android.mk
 include $(commands_recovery_local_path)/mmcutils/Android.mk

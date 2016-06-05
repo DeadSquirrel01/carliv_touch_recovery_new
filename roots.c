@@ -20,6 +20,7 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <ctype.h>
 
@@ -194,6 +195,18 @@ char* get_extra_storage_path() {
     return extra_storage_path;
 }
 
+static char* usb_storage_path = NULL;
+char* get_usb_storage_path() {
+	if (usb_storage_path == NULL) {
+		if (volume_for_path("/usb-otg") != NULL) {
+	        usb_storage_path = "/usb-otg";
+		} else if (volume_for_path("/usbdisk") != NULL) {
+	        usb_storage_path = "/usbdisk"; 
+		}
+	}   
+    return usb_storage_path;
+}
+
 static int is_migrated_storage = -1;
 
 int use_migrated_storage() {
@@ -350,9 +363,7 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
         return mtd_mount_partition(partition, mount_point, v->fs_type, 0);
     } else if (strcmp(v->fs_type, "ext4") == 0 ||
                strcmp(v->fs_type, "ext3") == 0 ||
-#ifdef USE_F2FS
                strcmp(v->fs_type, "f2fs") == 0 ||
-#endif
                strcmp(v->fs_type, "rfs") == 0 ||
                strcmp(v->fs_type, "vfat") == 0) {
         if ((result = try_mount(v->device, mount_point, v->fs_type, v->fs_options)) == 0)
@@ -416,6 +427,20 @@ int ensure_path_unmounted(const char* path) {
     }
 
     return unmount_mounted_volume(mv);
+}
+
+static int exec_cmd(const char* path, char* const argv[]) {
+    int status;
+    pid_t child;
+    if ((child = vfork()) == 0) {
+        execv(path, argv);
+        _exit(-1);
+    }
+    waitpid(child, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        printf("%s failed with status %d\n", path, WEXITSTATUS(status));
+    }
+    return WEXITSTATUS(status);
 }
 
 int format_volume(const char* volume) {
@@ -482,25 +507,43 @@ int format_volume(const char* volume) {
         return 0;
     }
 
+	int result;
+	ssize_t length = 0;
+	if (v->length != 0) length = v->length;
     if (strcmp(v->fs_type, "ext4") == 0) {
-        int result = make_ext4fs(v->device, v->length, volume, sehandle);
+        result = make_ext4fs(v->device, length, volume, sehandle);
         if (result != 0) {
-            LOGE("format_volume: make_extf4fs failed on %s\n", v->device);
+            LOGE("format_volume: make_ext4fs failed on %s\n", v->device);
             return -1;
         }
         return 0;
     }
 
-#ifdef USE_F2FS
     if (strcmp(v->fs_type, "f2fs") == 0) {
-        char* args[] = { "mkfs.f2fs", v->device };
-        if (make_f2fs_main(2, args) != 0) {
-            LOGE("format_volume: mkfs.f2fs failed on %s\n", v->device);
+        char bytes_reserved[20], num_sectors[20];
+		const char* f2fs_argv[6] = {"mkfs.f2fs", "-t1"};
+		if (length < 0) {
+			snprintf(bytes_reserved, sizeof(bytes_reserved), "%zd", -length);
+			f2fs_argv[2] = "-r";
+			f2fs_argv[3] = bytes_reserved;
+			f2fs_argv[4] = v->device;
+			f2fs_argv[5] = NULL;
+		} else {
+			/* num_sectors can be zero which mean whole device space */
+			snprintf(num_sectors, sizeof(num_sectors), "%zd", length / 512);
+			f2fs_argv[2] = v->device;
+			f2fs_argv[3] = num_sectors;
+			f2fs_argv[4] = NULL;
+		}
+		const char *f2fs_path = "/sbin/mkfs.f2fs";
+
+		result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
+        if (result != 0) {
+            LOGE("format_volume: make f2fs failed on %s\n", v->device);
             return -1;
         }
         return 0;
     }
-#endif
 
 #if 0
     LOGE("format_volume: fs_type \"%s\" unsupported\n", v->fs_type);
@@ -550,7 +593,7 @@ int setup_encrypted_data() {
 			sleep(1);
 	}
 
-	property_get("ro.cwm.crypto.passwd", crypto_passwd, "error");
+	property_get("ro.ctr.crypto.passwd", crypto_passwd, "error");
 	if (strcmp(crypto_passwd, "error") == 0) {
 			sprintf(cmd, "vdc cryptfs checkpw %s", DEFAULT_PASSWORD);
 			sleep(1);

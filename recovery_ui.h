@@ -112,30 +112,4 @@ void reboot_main_system(int cmd, int flags, char *arg);
 
 void draw_menu();
 
-extern int minizip_main(int argc, char **argv);
-extern int flash_image_main(int argc, char **argv);
-extern int volume_main(int argc, char **argv);
-extern int edify_main(int argc, char **argv);
-extern int dump_image_main(int argc, char **argv);
-extern int erase_image_main(int argc, char **argv);
-extern int mkyaffs2image_main(int argc, char **argv);
-extern int unyaffs_main(int argc, char **argv);
-extern int make_ext4fs_main(int argc, char **argv);
-extern int nandroid_main(int argc, char **argv);
-extern int bu_main(int argc, char **argv);
-extern int reboot_main(int argc, char **argv);
-extern int poweroff_main(int argc, char **argv);
-extern int setprop_main(int argc, char **argv);
-extern int getprop_main(int argc, char **argv);
-extern int pigz_main(int argc, char **argv);
-extern int sdcard_main(int argc, char **argv);
-extern int busybox_driver(int argc, char **argv);
-#ifdef USE_F2FS
-extern int make_f2fs_main(int argc, char **argv);
-extern int fsck_f2fs_main(int argc, char **argv);
-#endif
-#ifdef BOARD_INCLUDE_CRYPTO
-extern int vdc_main(int argc, char **argv);
-#endif
-
 #endif
