@@ -39,7 +39,7 @@
 #include "cutils/android_reboot.h"
 #include "cutils/properties.h"
 #include "install.h"
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "minzip/DirUtil.h"
 #include "roots.h"
 #include "recovery_ui.h"
@@ -49,6 +49,7 @@
 
 #include "extendedcommands.h"
 #include "flashutils/flashutils.h"
+#include "recovery_cmds.h"
 
 struct selabel_handle *sehandle = NULL;
 
@@ -60,7 +61,7 @@ static const struct option OPTIONS[] = {
   { "wipe_cache", no_argument, NULL, 'c' },
   { "show_text", no_argument, NULL, 't' },
   { "sideload", no_argument, NULL, 'l' },
-  { "shutdown_after", no_argument, NULL, 'q' },
+  { "shutdown_after", no_argument, NULL, 'p' },
   { NULL, 0, NULL, 0 },
 };
 
@@ -1055,73 +1056,41 @@ int main(int argc, char **argv) {
     // set by init
     umask(0);
 
-    if (strcmp(basename(argv[0]), "recovery") != 0)
+    char* command = argv[0];
+    char* stripped = strrchr(argv[0], '/');
+    if (stripped)
+        command = stripped + 1;
+
+    if (strcmp(command, "ctr") != 0)
     {
-        if (strstr(argv[0], "minizip") != NULL)
-            return minizip_main(argc, argv);
-        if (strstr(argv[0], "flash_image") != NULL)
-            return flash_image_main(argc, argv);
-        if (strstr(argv[0], "volume") != NULL)
-            return volume_main(argc, argv);
-        if (strstr(argv[0], "edify") != NULL)
-            return edify_main(argc, argv);
-        if (strstr(argv[0], "dump_image") != NULL)
-            return dump_image_main(argc, argv);
-        if (strstr(argv[0], "erase_image") != NULL)
-            return erase_image_main(argc, argv);
-        if (strstr(argv[0], "mkyaffs2image") != NULL)
-            return mkyaffs2image_main(argc, argv);
-        if (strstr(argv[0], "make_ext4fs") != NULL)
-            return make_ext4fs_main(argc, argv);
-        if (strstr(argv[0], "unyaffs") != NULL)
-            return unyaffs_main(argc, argv);
-        if (strstr(argv[0], "nandroid"))
-            return nandroid_main(argc, argv);
-        if (strstr(argv[0], "bu") == argv[0] + strlen(argv[0]) - 2)
-            return bu_main(argc, argv);
-        if (strstr(argv[0], "reboot"))
-            return reboot_main(argc, argv);
+        struct recovery_cmd cmd = get_command(command);
+        if (cmd.name)
+            return cmd.main_func(argc, argv);
+
 #ifdef BOARD_RECOVERY_HANDLES_MOUNT
-        if (strstr(argv[0], "mount") && argc == 2 && !strstr(argv[0], "umount"))
+        if (!strcmp(command, "mount") && argc == 2)
         {
             load_volume_table();
             return ensure_path_mounted(argv[1]);
         }
 #endif
-        if (strstr(argv[0], "poweroff")){
-            return reboot_main(argc, argv);
-        }
-        if (strstr(argv[0], "setprop"))
-            return setprop_main(argc, argv);
-        if (strstr(argv[0], "getprop"))
-            return getprop_main(argc, argv);
-        if (strstr(argv[0], "pigz"))
-            return pigz_main(argc, argv); 
-        if (strstr(argv[0], "sdcard"))
-            return sdcard_main(argc, argv);
-		if (strstr(argv[0], "setup_adbd")) {
-			load_volume_table();
+        if (!strcmp(command, "setup_adbd")) {
+            load_volume_table();
             setup_adbd();
             return 0;
-		}
-#ifdef BOARD_INCLUDE_CRYPTO
-		if (strstr(argv[0], "vdc"))
-            return vdc_main(argc, argv);
-#endif 
-#ifdef USE_F2FS
-		if (strstr(argv[0], "mkfs.f2fs"))
-            return make_f2fs_main(argc, argv);
-        if (strstr(argv[0], "fsck.f2fs"))
-            return fsck_f2fs_main(argc, argv);
-#endif 
-		if (strstr(argv[0], "start")) {
-            return property_set("ctl.start", argv[1]);
-		}
-		if (strstr(argv[0], "stop")) {
-            return property_set("ctl.stop", argv[1]);
-		}
+        }
+        if (!strcmp(command, "start")) {
+            property_set("ctl.start", argv[1]);
+            return 0;
+        }
+        if (!strcmp(command, "stop")) {
+            property_set("ctl.stop", argv[1]);
+            return 0;
+        }
         return busybox_driver(argc, argv);
     }    
+    
+    __system("/sbin/postrecoveryboot.sh");
 
     int is_user_initiated_recovery = 0;
     time_t start = time(NULL);
@@ -1133,10 +1102,8 @@ int main(int argc, char **argv) {
 
     device_ui_init(&ui_parameters);
     ui_init();
-    ui_print(EXPAND(RECOVERY_VERSION)"_Lollipop\n");
+    ui_print(EXPAND(RECOVERY_VERSION)"**Android "EXPAND(RECOVERY_BUILD_OS)"**\n");
     ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
-    
-    __system("/sbin/postrecoveryboot.sh");
     
     load_volume_table();
     process_volumes();
@@ -1148,7 +1115,6 @@ int main(int argc, char **argv) {
     rotate_last_logs(10);
     get_args(&argc, &argv);
 
-    int previous_runs = 0;
     const char *send_intent = NULL;
     const char *update_package = NULL;
     int wipe_data = 0, wipe_cache = 0;
@@ -1160,12 +1126,8 @@ int main(int argc, char **argv) {
     int arg;
     while ((arg = getopt_long(argc, argv, "", OPTIONS, NULL)) != -1) {
         switch (arg) {
-        case 'p': previous_runs = atoi(optarg); break;
         case 's': send_intent = optarg; break;
-        case 'u':
-            if (update_package == NULL)
-                update_package = optarg;
-            break;
+        case 'u': update_package = optarg; break;
         case 'w':
 #ifndef BOARD_RECOVERY_ALWAYS_WIPES
         wipe_data = wipe_cache = 1;
@@ -1179,7 +1141,7 @@ int main(int argc, char **argv) {
         case 'c': wipe_cache = 1; break;
         case 't': ui_show_text(1); break;
         case 'l': sideload = 1; break;
-        case 'q': shutdown_after = 1; break;
+        case 'p': shutdown_after = 1; break;
         case '?':
             LOGE("Invalid command argument\n");
             continue;
@@ -1198,7 +1160,6 @@ int main(int argc, char **argv) {
 		LOGI("Selinux enabled!\n");
 	}
 
-    LOGI("device_recovery_start()\n");
     device_recovery_start();
 
     printf("Command:");
@@ -1214,11 +1175,15 @@ int main(int argc, char **argv) {
         if (strncmp(update_package, "CACHE:", 6) == 0) {
             int len = strlen(update_package) + 10;
             char* modified_path = (char*)malloc(len);
-            strlcpy(modified_path, "/cache/", len);
-            strlcat(modified_path, update_package+6, len);
-            printf("(replacing path \"%s\" with \"%s\")\n",
-                   update_package, modified_path);
-            update_package = modified_path;
+            if (modified_path) {
+                strlcpy(modified_path, "/cache/", len);
+                strlcat(modified_path, update_package+6, len);
+                printf("(replacing path \"%s\" with \"%s\")\n",
+                       update_package, modified_path);
+                update_package = modified_path;
+            }
+            else
+                printf("modified_path allocation failed\n");
         }
     }
     printf("\n");

@@ -1,13 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-struct gimp_image
-{
-  int width, height;
-  unsigned char *pixel_data;
-}gimp_image;
-
-int main(int argc, char **argv)
+int main(int argc, char *argv)
 {
     unsigned n;
     unsigned char *x;

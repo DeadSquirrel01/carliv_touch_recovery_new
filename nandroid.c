@@ -43,7 +43,7 @@
 #include "bootloader.h"
 #include "common.h"
 #include "install.h"
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "minzip/DirUtil.h"
 #include "roots.h"
 #include "recovery_ui.h"
@@ -471,7 +471,7 @@ int nandroid_backup(const char* backup_path) {
 
 //=========================================/
 //=        Nandroid advanced backup       =/
-//=          created by carliv@xda        =/
+//=             by carliv@xda             =/
 //=========================================/
 
 int nandroid_advanced_backup(const char* backup_path, int boot, int system, int data, int cache) {
@@ -549,7 +549,7 @@ int nandroid_advanced_backup(const char* backup_path, int boot, int system, int 
 
 //=========================================/
 //=           MTK special backup          =/
-//=          created by carliv@xda        =/
+//=             by carliv@xda             =/
 //=========================================/
 
 int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram, int secro) {
@@ -812,12 +812,10 @@ static int nandroid_restore_partition_extended(const char* backup_path, const ch
     else if (0 == strcmp(vol->mount_point, "/data") && is_data_media())
         backup_filesystem = NULL;
 
-#ifdef USE_F2FS
     else if (backup_filesystem != NULL && strcmp(vol->fs_type, backup_filesystem) != 0 &&
                 (strcmp(vol->fs_type, "ext4") == 0 || strcmp(vol->fs_type, "f2fs") == 0) &&
                 (strcmp(backup_filesystem, "ext4") == 0 || strcmp(backup_filesystem, "f2fs") == 0))
         backup_filesystem = NULL;
-#endif
 
     ensure_directory(mount_point);
 
@@ -993,7 +991,7 @@ int nandroid_restore(const char* backup_path, int restore_boot, int restore_syst
 
 //=========================================/
 //=       Nandroid advanced restore       =/
-//=          created by carliv@xda        =/
+//=             by carliv@xda             =/
 //=========================================/
 
 int nandroid_advanced_restore(const char* backup_path, int boot, int system, int data, int cache) {
@@ -1056,8 +1054,8 @@ int nandroid_advanced_restore(const char* backup_path, int boot, int system, int
 #ifdef BOARD_HAS_MTK_CPU
 
 //=========================================/
-//=           MTK special restore        =/
-//=          created by carliv@xda        =/
+//=           MTK special restore         =/
+//=             by carliv@xda             =/
 //=========================================/
 
 int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram, int secro) {
@@ -1110,6 +1108,42 @@ int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram
 }
 
 #endif
+
+int ctr_flash_image(const char* backup_path, int boot, int recovery) {
+
+	ui_set_background(BACKGROUND_ICON_INSTALLING);
+    ui_show_indeterminate_progress();
+    nandroid_files_total = 0;
+
+	if (ensure_path_mounted(backup_path) != 0)
+        return print_and_error("Can't mount image folder path\n", NANDROID_ERROR_GENERAL);
+
+    ui_print("-- Start the image flashing process from %s.\n", backup_path);
+
+    int ret;
+    if (boot) {
+        if (0 != (ret = nandroid_restore_partition(backup_path, "/boot")))
+	        return print_and_error(NULL, ret);
+	        ui_print("\nBoot image flashed!\n");
+	}
+	if (recovery) {
+		if (0 != (ret = nandroid_restore_partition(backup_path, "/recovery")))
+	        return print_and_error(NULL, ret);
+	        ui_print("\nRecovery image flashed!\n");
+	}
+
+    sync();
+    ui_reset_progress();
+    ui_set_background(BACKGROUND_ICON_NONE);
+	
+	if (confirm_selection("You want to reboot recovery now?", "Yes - Reboot recovery")) {	
+	    reboot_main_system(ANDROID_RB_RESTART2, 0, "recovery");
+	    return 0;
+	}
+
+    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    return 0;
+}
 
 static int nandroid_undump(const char* partition) {
     nandroid_files_total = 0;

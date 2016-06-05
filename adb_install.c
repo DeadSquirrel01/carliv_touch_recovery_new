@@ -26,7 +26,7 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "cutils/properties.h"
 #include "install.h"
 #include "common.h"
@@ -106,7 +106,7 @@ apply_from_adb() {
 
     struct sideload_waiter_data data;
     if ((data.child = fork()) == 0) {
-        execl("/sbin/recovery", "recovery", "--adbd", NULL);
+        execl("/sbin/ctr", "recovery", "--adbd", NULL);
         _exit(-1);
     }
     

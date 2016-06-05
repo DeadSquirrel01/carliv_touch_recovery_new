@@ -1,0 +1,63 @@
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+LOCAL_CFLAGS += -Wno-unused-parameter
+LOCAL_SRC_FILES := graphics_overlay.c events.c resources.c
+ifneq ($(BOARD_CUSTOM_GRAPHICS),)
+  LOCAL_SRC_FILES += $(BOARD_CUSTOM_GRAPHICS)
+else
+  LOCAL_SRC_FILES += graphics.c
+endif
+
+LOCAL_C_INCLUDES += \
+    external/libpng \
+    external/zlib \
+    system/core/libpixelflinger/include \
+    system/core/include/pixelflinger
+
+LOCAL_STATIC_LIBRARIES += libpng
+LOCAL_WHOLE_STATIC_LIBRARIES := libpixelflinger_static
+
+LOCAL_MODULE := libminuictr
+
+
+
+# This used to compare against values in double-quotes (which are just
+# ordinary characters in this context).  Strip double-quotes from the
+# value so that either will work.
+
+ifeq ($(subst ",,$(TARGET_RECOVERY_PIXEL_FORMAT)),RGBA_8888)
+  LOCAL_CFLAGS += -DRECOVERY_RGBA
+endif
+ifeq ($(subst ",,$(TARGET_RECOVERY_PIXEL_FORMAT)),RGBX_8888)
+  LOCAL_CFLAGS += -DRECOVERY_RGBX
+endif
+ifeq ($(subst ",,$(TARGET_RECOVERY_PIXEL_FORMAT)),BGRA_8888)
+  LOCAL_CFLAGS += -DRECOVERY_BGRA
+endif
+
+ifneq ($(TARGET_RECOVERY_OVERSCAN_PERCENT),)
+  LOCAL_CFLAGS += -DOVERSCAN_PERCENT=$(TARGET_RECOVERY_OVERSCAN_PERCENT)
+else
+  LOCAL_CFLAGS += -DOVERSCAN_PERCENT=0
+endif
+
+ifeq ($(BOARD_HAS_FLIPPED_SCREEN), true)
+LOCAL_CFLAGS += -DBOARD_HAS_FLIPPED_SCREEN
+endif
+
+ifneq ($(BOARD_USE_CUSTOM_RECOVERY_FONT),)
+  LOCAL_CFLAGS += -DBOARD_USE_CUSTOM_RECOVERY_FONT=$(BOARD_USE_CUSTOM_RECOVERY_FONT)
+endif
+
+ifneq ($(TARGET_RECOVERY_LCD_BACKLIGHT_PATH),)
+  LOCAL_CFLAGS += -DRECOVERY_LCD_BACKLIGHT_PATH=$(TARGET_RECOVERY_LCD_BACKLIGHT_PATH)
+endif
+
+include $(BUILD_STATIC_LIBRARY)
+
+# Used by OEMs for factory test images.
+include $(CLEAR_VARS)
+LOCAL_MODULE := libminuictr
+LOCAL_WHOLE_STATIC_LIBRARIES += libminuictr
+LOCAL_SHARED_LIBRARIES := libpng
+include $(BUILD_SHARED_LIBRARY)

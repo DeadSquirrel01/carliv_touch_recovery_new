@@ -10,14 +10,17 @@ else
     endif
 endif
 
-
 ifeq ($(RECOVERY_PATH_SET),true)
 
-ifneq (,$(filter $(PLATFORM_SDK_VERSION), 21 22))
-    BOARD_SEPOLICY_UNION += ctr.te
-endif
-
 LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := fuse_sideload.c
+LOCAL_CFLAGS := -O2 -g -DADB_HOST=0 -Wall -Wno-unused-parameter
+LOCAL_CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
+LOCAL_MODULE := libfusesideload
+LOCAL_STATIC_LIBRARIES := libcutils libc libmincrypt
+include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 
@@ -29,12 +32,9 @@ LOCAL_SRC_FILES := \
     ui.c \
     extendedcommands.c \
     nandroid.c \
-    ../../system/core/toolbox/dynarray.c \
-    ../../system/core/toolbox/getprop.c \
-    ../../system/core/toolbox/newfs_msdos.c \
-    ../../system/core/toolbox/setprop.c \
-    ../../system/core/toolbox/start.c \
-    ../../system/core/toolbox/stop.c \
+    libcrecovery/toolbox/dynarray.c \
+    libcrecovery/toolbox/getprop.c \
+    libcrecovery/toolbox/setprop.c \
     edifyscripting.c \
     adb_install.c \
     asn1_decoder.c \
@@ -42,32 +42,26 @@ LOCAL_SRC_FILES := \
     fuse_sdcard_provider.c \
     propsrvc/legacy_property_service.c
 
+LOCAL_SRC_FILES += \
+    ../../system/core/toolbox/newfs_msdos.c \
+    ../../system/core/toolbox/start.c \
+    ../../system/core/toolbox/stop.c \
+    
 ifeq ($(BOARD_INCLUDE_CRYPTO), true)
 LOCAL_CFLAGS += -DBOARD_INCLUDE_CRYPTO
 LOCAL_SRC_FILES += \
 	../../system/vold/vdc.c
 endif
 
-ifeq ($(TARGET_RECOVERY_INITRC),)
-ifeq ($(BOARD_INCLUDE_CRYPTO), true)
-	TARGET_RECOVERY_INITRC := $(LOCAL_PATH)/etc/crypto/init.rc
-else
-	TARGET_RECOVERY_INITRC := $(LOCAL_PATH)/etc/init.rc
-endif
-endif
-
 ADDITIONAL_RECOVERY_FILES := $(shell echo $$ADDITIONAL_RECOVERY_FILES)
 LOCAL_SRC_FILES += $(ADDITIONAL_RECOVERY_FILES)
 
-LOCAL_MODULE := recovery
+LOCAL_MODULE := ctr
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 
-ifeq ($(TARGET_USERIMAGES_USE_F2FS),true)
-ifeq ($(HOST_OS),linux)
-LOCAL_REQUIRED_MODULES := mkfs.f2fs
-endif
-endif
+LOCAL_MODULE_TAGS := eng
+LOCAL_LDFLAGS := -Wl,--no-fatal-warnings
 
 # We will allways refer and give credits here to  Koushik Dutta who made this possible in 
 # the first place!
@@ -78,7 +72,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.1
+RECOVERY_VERSION := $(RECOVERY_NAME) v6.1
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -86,6 +80,8 @@ LOCAL_CFLAGS += -DRECOVERY_API_VERSION=$(RECOVERY_API_VERSION)
 LOCAL_CFLAGS += -Wl,--no-fatal-warnings
 LOCAL_CFLAGS += -Wno-unused-parameter
 LOCAL_CFLAGS += -Wno-sign-compare
+
+LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
 
 ifndef BOARD_USE_CUSTOM_RECOVERY_FONT
 ifdef DEVICE_RESOLUTION
@@ -150,7 +146,8 @@ BOARD_RECOVERY_CHAR_HEIGHT := $(shell echo $(BOARD_USE_CUSTOM_RECOVERY_FONT) | c
 RECOVERY_BUILD_DATE := $(shell date +"%Y-%m-%d")
 RECOVERY_BUILD_USER := $(shell whoami)
 RECOVERY_BUILD_HOST := $(shell hostname)
-LOCAL_CFLAGS += -DBOARD_RECOVERY_CHAR_WIDTH=$(BOARD_RECOVERY_CHAR_WIDTH) -DBOARD_RECOVERY_CHAR_HEIGHT=$(BOARD_RECOVERY_CHAR_HEIGHT) -DRECOVERY_BUILD_DATE="$(RECOVERY_BUILD_DATE)" -DRECOVERY_BUILD_USER="$(RECOVERY_BUILD_USER)" -DRECOVERY_BUILD_HOST="$(RECOVERY_BUILD_HOST)"
+RECOVERY_BUILD_OS := $(PLATFORM_VERSION)
+LOCAL_CFLAGS += -DBOARD_RECOVERY_CHAR_WIDTH=$(BOARD_RECOVERY_CHAR_WIDTH) -DBOARD_RECOVERY_CHAR_HEIGHT=$(BOARD_RECOVERY_CHAR_HEIGHT) -DRECOVERY_BUILD_DATE="$(RECOVERY_BUILD_DATE)" -DRECOVERY_BUILD_USER="$(RECOVERY_BUILD_USER)" -DRECOVERY_BUILD_HOST="$(RECOVERY_BUILD_HOST)" -DRECOVERY_BUILD_OS="$(RECOVERY_BUILD_OS)"
 
 BOARD_RECOVERY_DEFINES := BOARD_HAS_NO_SELECT_BUTTON BOARD_UMS_LUNFILE BOARD_RECOVERY_ALWAYS_WIPES BOARD_RECOVERY_HANDLES_MOUNT RECOVERY_EXTEND_NANDROID_MENU TARGET_USE_CUSTOM_LUN_FILE_PATH TARGET_DEVICE TARGET_RECOVERY_FSTAB BOARD_HAS_MTK_CPU CUSTOM_BATTERY_FILE CUSTOM_BATTERY_STATS_PATH BOARD_NEEDS_MTK_GETSIZE BOARD_USE_PROTOCOL_TYPE_B RECOVERY_TOUCHSCREEN_FLIP_X RECOVERY_TOUCHSCREEN_FLIP_Y RECOVERY_TOUCHSCREEN_SWAP_XY
 
@@ -165,23 +162,69 @@ ifneq ($(BOARD_RECOVERY_BLDRMSG_OFFSET),)
 endif
 
 LOCAL_C_INCLUDES := \
-    system/vold \
-    system/extras/ext4_utils \
-    system/core/adb \
-    external/e2fsprogs/lib \
-    system/core/libsparse \
-	bionic \
-	external/openssl/include \
+	system/vold \
+	system/extras/ext4_utils \
+	system/core/adb \
+	external/e2fsprogs/lib \
+	system/core/libsparse \
+	bionic/libc/bionic \
+	external/boringssl/include \
 	system/core/include \
 	external/stlport/stlport
 
-LOCAL_STATIC_LIBRARIES :=
-
-ifeq ($(TARGET_USERIMAGES_USE_EXT4), true)
-	LOCAL_CFLAGS += -DUSE_EXT4
-	LOCAL_C_INCLUDES += system/extras/ext4_utils
-	LOCAL_STATIC_LIBRARIES += libext4_utils_static libz liblz4-static
-endif
+LOCAL_STATIC_LIBRARIES := \
+    libext4_utils_static \
+    libmake_ext4fs_static \
+    libminizip_static \
+    liblz4-static \
+    libminiunz_static \
+    libsparse_static \
+    libfsck_msdos \
+    libminipigz_static \
+    libzopfli \
+    libreboot_static \
+    libsdcard \
+    libminzip \
+    libz \
+    libminuictr \
+    libpng \
+    libpixelflinger_static \
+    libedify \
+    libbusybox \
+    libmkyaffs2image \
+    libunyaffs \
+    libflashutils \
+    liberase_image \
+    libdump_image \
+    libflash_image \
+    libmtdutils \
+    libmmcutils \
+    libbmlutils \
+    libcrecovery \
+    libmincrypt \
+    libminadbd \
+    libmksh_ctr \
+    libfusesideload \
+    libfuse_static \
+    libf2fs_sparseblock \
+    libdiskconfig \
+    libsysutils \
+    libfs_mgr \
+    libsquashfs_utils \
+    libbase \
+    libcutils \
+    libutils \
+    liblog \
+    liblogwrap \
+    libselinux \
+    libcrypto_static \
+    libscrypt_static \
+    libnl \
+    libc++_static \
+    libm \
+    libc \
+    libext2_blkid \
+	libext2_uuid
 
 ifeq ($(ENABLE_LOKI_RECOVERY),true)
   LOCAL_CFLAGS += -DENABLE_LOKI
@@ -189,12 +232,16 @@ ifeq ($(ENABLE_LOKI_RECOVERY),true)
   LOCAL_SRC_FILES += loki/loki_recovery.c
 endif
 
-# This binary is in the recovery ramdisk, which is otherwise a copy of root.
-# It gets copied there in config/Makefile.  LOCAL_MODULE_TAGS suppresses
-# a (redundant) copy of the binary in /system/bin for user builds.
-# TODO: Build the ramdisk image in a more principled way.
+ifeq ($(BOARD_USES_BML_OVER_MTD),true)
+LOCAL_STATIC_LIBRARIES += libbml_over_mtd
+endif
 
-LOCAL_MODULE_TAGS := eng
+ifeq ($(BOARD_INCLUDE_CRYPTO), true)
+LOCAL_CFLAGS += -DMINIVOLD
+LOCAL_WHOLE_STATIC_LIBRARIES += libminivold_static
+LOCAL_C_INCLUDES += system/extras/ext4_utils system/core/fs_mgr/include external/fsck_msdos
+LOCAL_C_INCLUDES += system/vold
+endif
 
 ifeq ($(BOARD_CUSTOM_RECOVERY_KEYMAPPING),)
   LOCAL_SRC_FILES += default_recovery_keys.c
@@ -208,97 +255,32 @@ else
   LOCAL_SRC_FILES += $(BOARD_CUSTOM_RECOVERY_UI)
 endif
 
-LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
-
 LOCAL_C_INCLUDES += system/extras/ext4_utils
-LOCAL_C_INCLUDES += external/openssl/include
+LOCAL_C_INCLUDES += external/boringssl/include
 
-LOCAL_STATIC_LIBRARIES += libmake_ext4fs libext4_utils_static libz liblz4-static libreboot_static libsparse_static
-LOCAL_STATIC_LIBRARIES += libminipigz libsdcard libfsck_msdos
-
-ifeq ($(TARGET_USERIMAGES_USE_F2FS), true)
-LOCAL_CFLAGS += -DUSE_F2FS
-LOCAL_STATIC_LIBRARIES += libf2fs_fmt
-endif
-LOCAL_STATIC_LIBRARIES += libminzip libunz libmincrypt
-
-LOCAL_STATIC_LIBRARIES += libminizip libminadbd libedify libbusybox libmkyaffs2image libunyaffs liberase_image libdump_image libflash_image libfusesideload
-LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
-
-LOCAL_STATIC_LIBRARIES += libcrypto_static libcrecovery libflashutils libmtdutils libmmcutils libbmlutils
-
-ifeq ($(BOARD_USES_BML_OVER_MTD),true)
-LOCAL_STATIC_LIBRARIES += libbml_over_mtd
-endif
-
-LOCAL_STATIC_LIBRARIES += libminui libpixelflinger_static libpng libcutils liblog libutils
-LOCAL_STATIC_LIBRARIES += libstdc++ libc
-
-LOCAL_STATIC_LIBRARIES += libselinux
+RECOVERY_LINKS := bu make_ext4fs edify busybox flash_image dump_image mkyaffs2image unyaffs erase_image nandroid fstools reboot volume setprop getprop start stop minizip setup_adbd fsck_msdos newfs_msdos sdcard pigz
 
 ifeq ($(BOARD_INCLUDE_CRYPTO), true)
-LOCAL_STATIC_LIBRARIES += libvold
-LOCAL_C_INCLUDES += \
-	system/extras/ext4_utils \
-	system/core/fs_mgr/include \
-	external/fsck_msdos \
-LOCAL_C_INCLUDES += system/vold 
-endif
-
-ifeq ($(TARGET_USES_EXFAT),true)
-LOCAL_CFLAGS += -DHAVE_EXFAT
-LOCAL_STATIC_LIBRARIES += \
-	libexfat \
-	libexfat_fsck \
-	libexfat_mkfs \
-	libexfat_mount
-endif
-
-LOCAL_C_INCLUDES += system/extras/ext4_utils
-LOCAL_C_INCLUDES += external/openssl/include
-
-LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
-
-RECOVERY_LINKS := bu make_ext4fs edify busybox flash_image dump_image mkyaffs2image unyaffs erase_image nandroid reboot volume setprop getprop start stop minizip setup_adbd fsck_msdos newfs_msdos sdcard pigz
-
-ifeq ($(TARGET_USERIMAGES_USE_F2FS), true)
-RECOVERY_LINKS += mkfs.f2fs fsck.f2fs
-endif
-
-ifeq ($(TARGET_USES_EXFAT),true)
-RECOVERY_LINKS += fsck.exfat mkfs.exfat
-endif
-
-RECOVERY_LINKS += e2fsck mke2fs tune2fs fsck.ext4 mkfs.ext4 fsck.ntfs mkfs.ntfs mount.ntfs
-
-ifeq ($(BOARD_INCLUDE_CRYPTO), true)
-LOCAL_CFLAGS += -DMINIVOLD
-RECOVERY_LINKS += vdc
+RECOVERY_LINKS += minivold vdc
 endif
 
 # nc is provided by external/netcat
 RECOVERY_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(RECOVERY_LINKS))
 
-BUSYBOX_LINKS := $(shell cat external/busybox/busybox-minimal.links)
+BUSYBOX_LINKS := $(shell cat $(LOCAL_PATH)/busybox/busybox-minimal.links)
 exclude := tune2fs mke2fs
 RECOVERY_BUSYBOX_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(filter-out $(exclude),$(notdir $(BUSYBOX_LINKS))))
-
-ifeq ($(BOARD_INCLUDE_CRYPTO), true)
-LOCAL_ADDITIONAL_DEPENDENCIES := \
-    minivold
-endif
+RECOVERY_FSTOOLS_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(FSTOOLS_LINKS))
 
 LOCAL_ADDITIONAL_DEPENDENCIES += \
+    permissive.sh \
+    recovery_mkshrc \
     killrecovery.sh \
     nandroid-md5.sh \
     parted \
     sdparted     
 
-ifeq ($(TARGET_USES_EXFAT),true)
-LOCAL_ADDITIONAL_DEPENDENCIES += mount.exfat_static
-endif
-
-LOCAL_ADDITIONAL_DEPENDENCIES += recovery_mkshrc carliv
+LOCAL_ADDITIONAL_DEPENDENCIES += carliv
 
 LOCAL_ADDITIONAL_DEPENDENCIES += $(RECOVERY_SYMLINKS) $(RECOVERY_BUSYBOX_SYMLINKS)
 
@@ -323,13 +305,57 @@ $(RECOVERY_BUSYBOX_SYMLINKS):
 	@rm -rf $@
 	$(hide) ln -sf $(BUSYBOX_BINARY) $@ 
 
+# Now let's do fstools symlinks
+$(RECOVERY_FSTOOLS_SYMLINKS): FSTOOLS_BINARY := fstools
+$(RECOVERY_FSTOOLS_SYMLINKS):
+	@echo "Symlink: $@ -> $(FSTOOLS_BINARY)"
+	@mkdir -p $(dir $@)
+	@rm -rf $@
+	$(hide) ln -sf $(FSTOOLS_BINARY) $@ 
+	
+#permissive.sh
 include $(CLEAR_VARS)
-LOCAL_SRC_FILES := fuse_sideload.c
-LOCAL_CFLAGS := -O2 -g -DADB_HOST=0 -Wall -Wno-unused-parameter
-LOCAL_CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
-LOCAL_MODULE := libfusesideload
-LOCAL_C_INCLUDES += system/core/include
-LOCAL_STATIC_LIBRARIES := libcutils libc libmincrypt
+LOCAL_MODULE := permissive.sh
+LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_CLASS := RECOVERY_EXECUTABLES
+LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
+LOCAL_SRC_FILES := permissive.sh
+include $(BUILD_PREBUILT)
+
+# make_ext4fs
+include $(CLEAR_VARS)
+LOCAL_MODULE := libmake_ext4fs_static
+LOCAL_MODULE_TAGS := optional
+LOCAL_CFLAGS := -Dmain=make_ext4fs_main
+LOCAL_SRC_FILES := \
+    ../../system/extras/ext4_utils/make_ext4fs_main.c \
+    ../../system/extras/ext4_utils/canned_fs_config.c
+include $(BUILD_STATIC_LIBRARY)
+
+# Minizip static library
+include $(CLEAR_VARS)
+LOCAL_MODULE := libminizip_static
+LOCAL_MODULE_TAGS := optional
+LOCAL_STATIC_LIBRARIES := libz
+LOCAL_CFLAGS := -Dmain=minizip_main -D__ANDROID__ -DIOAPI_NO_64
+LOCAL_C_INCLUDES := external/zlib
+LOCAL_SRC_FILES := \
+    ../../external/zlib/src/contrib/minizip/ioapi.c \
+    ../../external/zlib/src/contrib/minizip/minizip.c \
+    ../../external/zlib/src/contrib/minizip/zip.c
+include $(BUILD_STATIC_LIBRARY)
+
+# Miniunz static library
+include $(CLEAR_VARS)
+LOCAL_MODULE := libminiunz_static
+LOCAL_MODULE_TAGS := optional
+LOCAL_STATIC_LIBRARIES := libz
+LOCAL_CFLAGS := -Dmain=miniunz_main -D__ANDROID__ -DIOAPI_NO_64
+LOCAL_C_INCLUDES := external/zlib
+LOCAL_SRC_FILES := \
+    ../../external/zlib/src/contrib/minizip/ioapi.c \
+    ../../external/zlib/src/contrib/minizip/miniunz.c \
+    ../../external/zlib/src/contrib/minizip/unzip.c
 include $(BUILD_STATIC_LIBRARY)
 
 # Reboot static library
@@ -369,49 +395,59 @@ include $(BUILD_PREBUILT)
 include $(CLEAR_VARS)
 LOCAL_MODULE := libverifier
 LOCAL_MODULE_TAGS := tests
-LOCAL_SRC_FILES := asn1_decoder.c
+LOCAL_SRC_FILES := \
+    asn1_decoder.c
 include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
-
-LOCAL_CFLAGS += -Wno-unused-parameter
-
-LOCAL_SRC_FILES := verifier_test.c asn1_decoder.c verifier.c
-
+LOCAL_MODULE := verifier_test
+LOCAL_FORCE_STATIC_EXECUTABLE := true
+LOCAL_MODULE_TAGS := tests
+LOCAL_CFLAGS += -DVERIFIER_TEST -Wno-unused-parameter
+LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
+LOCAL_SRC_FILES := \
+	verifier_test.c \
+	asn1_decoder.c \
+	verifier.c
+LOCAL_STATIC_LIBRARIES := \
+	libmincrypt \
+	libminuictr \
+	libminzip \
+	libcutils \
+	libc
 LOCAL_C_INCLUDES += \
 	system/extras/ext4_utils \
-	external/openssl/include \
-	system/core/include
-
-LOCAL_MODULE := verifier_test
-
-LOCAL_FORCE_STATIC_EXECUTABLE := true
-
-LOCAL_MODULE_TAGS := tests
-
-LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
-LOCAL_STATIC_LIBRARIES := libmincrypt libminui libminzip libcutils libstdc++ libc
-
+	external/boringssl/include \
+	system/core/include \
+	system/core/fs_mgr/include \
+    system/vold
 include $(BUILD_EXECUTABLE)
 
 commands_recovery_local_path := $(LOCAL_PATH)
-include $(commands_recovery_local_path)/bmlutils/Android.mk
-include $(commands_recovery_local_path)/flashutils/Android.mk
-include $(commands_recovery_local_path)/libcrecovery/Android.mk
-include $(commands_recovery_local_path)/minui/Android.mk
-include $(commands_recovery_local_path)/devices/Android.mk
-include $(commands_recovery_local_path)/minzip/Android.mk
-include $(commands_recovery_local_path)/minadbd/Android.mk
-include $(commands_recovery_local_path)/yaffsc/Android.mk
-include $(commands_recovery_local_path)/mtdutils/Android.mk
-include $(commands_recovery_local_path)/mmcutils/Android.mk
-include $(commands_recovery_local_path)/tools/Android.mk
-include $(commands_recovery_local_path)/edify/Android.mk
-include $(commands_recovery_local_path)/uncrypt/Android.mk
-include $(commands_recovery_local_path)/updater/Android.mk
-include $(commands_recovery_local_path)/applypatch/Android.mk
-include $(commands_recovery_local_path)/utilities/Android.mk
-include $(commands_recovery_local_path)/loki/Android.mk
+
+include $(LOCAL_PATH)/minui/Android.mk \
+	$(LOCAL_PATH)/minuictr/Android.mk \
+	$(LOCAL_PATH)/minzip/Android.mk \
+	$(LOCAL_PATH)/edify/Android.mk \
+	$(LOCAL_PATH)/busybox/Android.mk \
+	$(LOCAL_PATH)/yaffsc/Android.mk \
+	$(LOCAL_PATH)/flashutils/Android.mk \
+	$(LOCAL_PATH)/mtdutils/Android.mk \
+	$(LOCAL_PATH)/mmcutils/Android.mk \
+	$(LOCAL_PATH)/bmlutils/Android.mk \
+	$(LOCAL_PATH)/libcrecovery/Android.mk \
+	$(LOCAL_PATH)/minadbd/Android.mk \
+	$(LOCAL_PATH)/mkshctr/Android.mk \
+	$(LOCAL_PATH)/devices/Android.mk \
+	$(LOCAL_PATH)/tools/Android.mk \
+	$(LOCAL_PATH)/uncrypt/Android.mk \
+	$(LOCAL_PATH)/updater/Android.mk \
+	$(LOCAL_PATH)/applypatch/Android.mk \
+	$(LOCAL_PATH)/fstools/Android.mk \
+	$(LOCAL_PATH)/utilities/Android.mk \
+	$(LOCAL_PATH)/loki/Android.mk \
+	$(LOCAL_PATH)/locpixelflinger/Android.mk
+
 commands_recovery_local_path :=
 
 endif

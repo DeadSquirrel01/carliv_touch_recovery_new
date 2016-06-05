@@ -18,13 +18,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <errno.h>
 #include <sys/mount.h>
 
 #ifdef BOARD_HAS_MTK_CPU
 #ifdef BOARD_NEEDS_MTK_GETSIZE
 #include <ctype.h>
-#include <unistd.h>
 #include <sys/limits.h>
 #include <dirent.h>
 #include <sys/stat.h>

@@ -42,7 +42,7 @@
 #include "extendedcommands.h"
 #include "flashutils/flashutils.h"
 #include "install.h"
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "minzip/DirUtil.h"
 #include "mtdutils/mounts.h"
 #include "mmcutils/mmcutils.h"

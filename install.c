@@ -27,7 +27,7 @@
 #include "common.h"
 #include "install.h"
 #include "mincrypt/rsa.h"
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "minzip/SysUtil.h"
 #include "minzip/Zip.h"
 #include "mtdutils/mounts.h"
