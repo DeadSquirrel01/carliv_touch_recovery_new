@@ -1,9 +1,9 @@
 **Carliv Touch Recovery**
 
-- version 6.1 is for Marshmallow (cm 13).
+- version 6.1 is for Marshmallow (cm 13 or aicp-mm6.0).
 The version starting number is related to android version.
 
-This is a CWM based recovery and I did put up some work to update it to marshmallow (cm-13) after official cwm development stopped at kitkat. It works with *MARSHMALLOW* kernels and it builds with cm 13. 
+This is a CWM based recovery and I did put up some work to update it to marshmallow (cm-13) after official cwm development stopped at kitkat. It works with *MARSHMALLOW* kernels and it builds with cm 13 or aicp-mm6.0. 
 For gui I ported [PhilZ Recovery](http://forum.xda-developers.com/showthread.php?t=2201860) full touch module. 
 Because the vold in cm 13 doesn't support cwm anymore I had to use the old *fstab1* type for functionality, although for building reason a valid recovery.fstab should be provided in device tree. In the last part there are some building hints to make it clear for those who want to try building it.
 
@@ -36,7 +36,7 @@ I worked alone on this, there is no team here, not because I don't want to :), b
 
 ____
 
-To build you need a local repo of cm-13 and a proper device tree. To see how a buildable  device tree looks check [this one from my github](https://github.com/carliv/device_mlais_mx).
+To build you need a local repo of cm-13 or aicp-mm6.0 and a proper device tree. To see how a buildable  device tree looks check [this one from my github](https://github.com/carliv/device_mlais_mx).
 
 Some things to be considered:
 
@@ -79,8 +79,8 @@ For system.prop from device tree:
 # system.prop for mx
 #
 ro.ctr.crypto.passwd="64656661756c745f70617373776f7264"
-ro.ctr.forbid_format=/frp,/persistent,/lk,/uboot,/logo,/metadata,/nvdata,/nvram,/secro,/metadata
-ro.ctr.forbid_mount=/frp,/persistent,/lk,/uboot,/logo,/metadata,/nvdata,/nvram,/secro,/metadata
+ro.ctr.forbid_format=/frp,/persistent,/lk,/uboot,/logo,/metadata,/nvdata,/nvram,/secro
+ro.ctr.forbid_mount=/frp,/persistent,/lk,/uboot,/logo,/metadata,/nvdata,/nvram,/secro
 ro.ctr.touch_accuracy=7
 
 ```
@@ -115,12 +115,21 @@ Important here is how you define internal storage which is data media
 You can see it's  used the old way with *datamedia* fstype and */dev/null* device.
 Important thing: if you have only internal storage define it as 
 `/sdcard   datamedia	/dev/null`
+
 If you have also an external sdcard, use either way:
-`/internal_sd	   datamedia	/dev/null
-/sdcard			vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1`
+
+```
+/internal_sd	   datamedia	/dev/null
+/sdcard			vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1
+```
+
 or
-`/sdcard 	datamedia	/dev/null
-/external_sd		vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1`
+
+```
+/sdcard 	datamedia	/dev/null
+/external_sd		vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1
+```
+
 As you can see the internal storage can be sdcard or internal_sd and external sdcard can be sdcard or external_sd, but internal storage can't be external_sd or external sdcard internal_sd.
 If your phone has OTG support you can use that too defining it like this
 `/usb-otg		vfat	/dev/block/sda1	/dev/block/sda`

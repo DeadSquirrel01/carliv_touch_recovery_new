@@ -8,7 +8,6 @@ int nandroid_backup(const char* backup_path);
 int nandroid_advanced_backup(const char* backup_path, int boot, int system, int data, int cache);
 int nandroid_advanced_restore(const char* backup_path, int boot, int system, int data, int cache);
 int nandroid_restore(const char* backup_path, int restore_boot, int restore_system, int restore_data, int restore_cache, int restore_sdext, int restore_wimax);
-int ctr_flash_image(const char* backup_path, int boot, int recovery);
 
 #ifdef BOARD_HAS_MTK_CPU
 int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram, int secro);
