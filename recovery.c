@@ -1102,7 +1102,7 @@ int main(int argc, char **argv) {
 
     device_ui_init(&ui_parameters);
     ui_init();
-    ui_print(EXPAND(RECOVERY_VERSION)" ** Android "EXPAND(RECOVERY_BUILD_OS)"**\n");
+    ui_print(EXPAND(RECOVERY_VERSION)" ** Android "EXPAND(RECOVERY_BUILD_OS)"\n");
     ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
     
     load_volume_table();

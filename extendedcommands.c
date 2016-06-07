@@ -1952,7 +1952,7 @@ void show_nandroid_menu() {
 		list[9] = "DELETE Backup from ExtraSD";
 	}
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
-    extend_nandroid_menu(list, 11, sizeof(list) / sizeof(char*));
+    extend_nandroid_menu(list, 10, sizeof(list) / sizeof(char*));
 #endif
 
     for (;;) {
@@ -2026,92 +2026,124 @@ void show_nandroid_menu() {
                     
             default:
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
-                handle_nandroid_menu(11, chosen_item);
+                handle_nandroid_menu(10, chosen_item);
 #endif
                 break;
         }
     }
 }
 
-static int flash_image_menu(const char* path) {
-    if (ensure_path_mounted(path) != 0) {
-        LOGE("Can't mount %s\n", path);
+static int flash_choosen_image(const char* image, const char* partition) {
+    Volume *vol = volume_for_path(partition);
+    // make sure the volume exists...
+    if (vol == NULL || vol->fs_type == NULL)
         return 0;
+
+	int ret;
+	const char* name = basename(partition);
+	
+	ui_print("[*] Erasing %s before flashing...\n", name);
+	if (0 != (ret = format_volume(partition))) {
+		ui_print("Error while erasing %s partition!", name);
+		return ret;
+	}
+
+	ui_print("[*] Flashing %s image...\n", name);
+	if (0 != (ret = restore_raw_partition(vol->fs_type, vol->device, image))) {
+		ui_print("Error while flashing %s image!", name);
+		return ret;
+	}
+	ui_print("\n%s image flashed!\n", name);
+	return 0;
+}
+
+static int ctr_flash_image(const char* image, int boot, int recovery) {
+
+	ui_set_background(BACKGROUND_ICON_INSTALLING);
+    ui_show_indeterminate_progress();
+    const char* imgname = basename(image);
+
+	int ret;
+    
+    if (boot && 0 != (ret = flash_choosen_image(image, "/boot"))) return ret;
+
+	if (recovery && 0 != (ret = flash_choosen_image(image, "/recovery"))) return ret;
+
+    sync();
+    ui_reset_progress();
+    ui_set_background(BACKGROUND_ICON_NONE);
+    sleep(1);
+	
+	if (recovery && confirm_selection("Do you want to reboot recovery now?", "Yes - Reboot recovery")) {	
+	    reboot_main_system(ANDROID_RB_RESTART2, 0, "recovery");
+	    return 0;
+	}
+
+    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    return 0;
+}
+
+static void choose_image_path_menu(const char* image) {
+
+    const char* headers[] = { "Choose the partition to flash on", NULL };
+    
+	char* partition_items[] = { "Boot",
+								"Recovery",
+								NULL };
+
+	for (;;) {
+		int chosen_item = get_menu_selection(headers, partition_items, 0, 0);
+		if (chosen_item == GO_BACK)
+            break;
+		switch (chosen_item) {
+		  case 0:
+			ctr_flash_image(image, 1, 0);
+			break;
+		  case 1:
+			ctr_flash_image(image, 0, 1);
+			break;
+		}
+	}    
+}
+
+static void show_choose_image_menu(const char *mount_point) {
+    if (ensure_path_mounted(mount_point) != 0) {
+        LOGE("Can't mount %s\n", mount_point);
+        return;
     }
 
-	const char* advancedheaders[] = { "Choose the folder that contain",
-									 "your images. The next menu will",
-									 "show you selection options.",
-									 NULL };
-    
-    char tmp[PATH_MAX];
-    sprintf(tmp, "%s/", path);
-    char* file = choose_file_menu(tmp, NULL, advancedheaders);
-    if (file == NULL)
-        return 0;
+    const char* headers[] = { "Choose an image to flash", NULL };
 
-    const char* headers[] = { "Flash Image menu", "", "Select image(s) to flash:", NULL };
+    char* file = choose_file_menu(mount_point, ".img", headers);
+    if (file == NULL)
+        return;
+    char confirm[PATH_MAX];
+    sprintf(confirm, "Yes - Flash %s", basename(file));
+
+    if (confirm_selection("Confirm Flash this image?", confirm)) {
+        choose_image_path_menu(file);
+    }
     
-    int flash_img[4];
-    char* img_item[4];
-    
-    flash_img[0] = 0;
-    flash_img[1] = 0;
-    flash_img[2] = 0;   
-    
-    img_item[3] = NULL;
-    
-    int cont = 1;
-    int ret = 0;
-    for (;cont;) {
-		if (flash_img[0] == 0)
-			img_item[0] = "Select boot:    ";
-		else
-			img_item[0] = "Flash boot: (+)";
-	    	
-	    if (flash_img[1] == 0)
-    		img_item[1] = "Select recovery:    ";
-	    else
-	    	img_item[1] = "Flash recovery: (+)";
-    	if (flash_img[2] == 0)
-	    	img_item[2] = "Start Flashing";
-	    	
-	    int chosen_item = get_menu_selection(headers, img_item, 0, 0);
-	    if (chosen_item == GO_BACK)
-            break;
-	    switch (chosen_item) {
-			case 0: 
-			flash_img[0] = !flash_img[0];			
-				continue;
-			case 1:
-			flash_img[1] = !flash_img[1];
-				continue;	
-		   
-			case 2: cont = 0;
-				break;
-		}
-	}
-    
-    if (!cont) {
-		ret = ctr_flash_image(file, flash_img[0], flash_img[1]);	
-	}
-	
-	return ret; 	
+    free(file);
 }
 
 static void show_flash_image_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
+    char* usb_path = get_usb_storage_path();
     
     const char* headers[] = {  "Flash Images from", NULL };
 
     static char* list[] = { "SDcard",
+                            NULL,
                             NULL,
                             NULL
     };
 
     if (extra_path != NULL)
         list[1] = "ExtraSD";
+    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0)
+        list[2] = "USB-Drive";
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
@@ -2120,10 +2152,13 @@ static void show_flash_image_menu() {
         switch (chosen_item)
         {
             case 0:
-                flash_image_menu(primary_path);
+                show_choose_image_menu(primary_path);
                 break;
             case 1:
-                flash_image_menu(extra_path);
+                show_choose_image_menu(extra_path);
+                break;
+            case 2:
+                show_choose_image_menu(usb_path);
                 break;
         }
     }

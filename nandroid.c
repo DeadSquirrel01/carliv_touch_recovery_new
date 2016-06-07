@@ -268,7 +268,7 @@ static nandroid_backup_handler get_backup_handler(const char *backup_path) {
 
     // Disable tar backups of yaffs2 by default
     char prefer_tar[PROPERTY_VALUE_MAX];
-    property_get("ro.cwm.prefer_tar", prefer_tar, "false");
+    property_get("ro.ctr.prefer_tar", prefer_tar, "false");
     if (strcmp("yaffs2", mv->filesystem) == 0 && strcmp("false", prefer_tar) == 0) {
         return mkyaffs2image_wrapper;
     }
@@ -741,7 +741,7 @@ static nandroid_restore_handler get_restore_handler(const char *backup_path) {
 
     // Disable tar backups of yaffs2 by default
     char prefer_tar[PROPERTY_VALUE_MAX];
-    property_get("ro.cwm.prefer_tar", prefer_tar, "false");
+    property_get("ro.ctr.prefer_tar", prefer_tar, "false");
     if (strcmp("yaffs2", mv->filesystem) == 0 && strcmp("false", prefer_tar) == 0) {
         return unyaffs_wrapper;
     }
@@ -1108,42 +1108,6 @@ int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram
 }
 
 #endif
-
-int ctr_flash_image(const char* backup_path, int boot, int recovery) {
-
-	ui_set_background(BACKGROUND_ICON_INSTALLING);
-    ui_show_indeterminate_progress();
-    nandroid_files_total = 0;
-
-	if (ensure_path_mounted(backup_path) != 0)
-        return print_and_error("Can't mount image folder path\n", NANDROID_ERROR_GENERAL);
-
-    ui_print("-- Start the image flashing process from %s.\n", backup_path);
-
-    int ret;
-    if (boot) {
-        if (0 != (ret = nandroid_restore_partition(backup_path, "/boot")))
-	        return print_and_error(NULL, ret);
-	        ui_print("\nBoot image flashed!\n");
-	}
-	if (recovery) {
-		if (0 != (ret = nandroid_restore_partition(backup_path, "/recovery")))
-	        return print_and_error(NULL, ret);
-	        ui_print("\nRecovery image flashed!\n");
-	}
-
-    sync();
-    ui_reset_progress();
-    ui_set_background(BACKGROUND_ICON_NONE);
-	
-	if (confirm_selection("You want to reboot recovery now?", "Yes - Reboot recovery")) {	
-	    reboot_main_system(ANDROID_RB_RESTART2, 0, "recovery");
-	    return 0;
-	}
-
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
-    return 0;
-}
 
 static int nandroid_undump(const char* partition) {
     nandroid_files_total = 0;
