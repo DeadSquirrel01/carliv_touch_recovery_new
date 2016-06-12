@@ -39,6 +39,9 @@ extern int setprop_main(int argc, char **argv);
 extern int getprop_main(int argc, char **argv);
 extern int fsck_msdos_main(int argc, char **argv);
 extern int newfs_msdos_main(int argc, char **argv);
+extern int mkfs_exfat_main(int argc, char **argv); 
+extern int mount_exfat_main(int argc, char **argv); 
+extern int fsck_exfat_main(int argc, char **argv);
 extern int nandroid_main(int argc, char **argv);
 extern int pigz_main(int argc, char **argv);
 extern int sdcard_main(int argc, char **argv);
@@ -72,6 +75,9 @@ static const struct recovery_cmd recovery_cmds[] = {
     { "getprop",        getprop_main },
     { "fsck_msdos",     fsck_msdos_main },
     { "newfs_msdos",    newfs_msdos_main },
+    { "mkfs.exfat",     mkfs_exfat_main },
+    { "exfat-fuse",     mount_exfat_main },
+    { "fsck.exfat",     fsck_exfat_main },
     { "pigz",           pigz_main },
     { "sdcard",         sdcard_main },
     { "sh",             mksh_main },

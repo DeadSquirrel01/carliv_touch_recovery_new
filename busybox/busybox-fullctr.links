@@ -12,7 +12,6 @@
 /sbin/brctl
 /bin/bunzip2
 /bin/bzcat
-/bin/bzip2
 /bin/cal
 /bin/cat
 /bin/catv
@@ -220,7 +219,6 @@
 /bin/unlzma
 /bin/unlzop
 /bin/unxz
-/bin/unzip
 /bin/uptime
 /bin/usleep
 /bin/uudecode

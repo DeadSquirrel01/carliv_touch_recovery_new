@@ -10,14 +10,14 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := android/regex/bb_regex.c
 LOCAL_C_INCLUDES := $(BB_PATH)/android/regex
 LOCAL_CFLAGS := -Wno-sign-compare
-LOCAL_MODULE := libclearsilverregex
+LOCAL_MODULE := libclearsilverregex.ctr
 include $(BUILD_STATIC_LIBRARY)
 
 # Make a static library for RPC library (coming from uClibc).
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := $(shell cat $(BB_PATH)/android/librpc.sources)
 LOCAL_C_INCLUDES := $(BB_PATH)/android/librpc
-LOCAL_MODULE := libuclibcrpc
+LOCAL_MODULE := libuclibcrpc.ctr
 LOCAL_CFLAGS += -fno-strict-aliasing
 ifeq ($(BIONIC_L),true)
 LOCAL_CFLAGS += -DBIONIC_ICS -DBIONIC_L
@@ -42,20 +42,20 @@ endif
 # On aosp (master), path is relative, not on cm (kitkat)
 bb_gen := $(abspath $(TARGET_OUT_INTERMEDIATES)/busybox)
 
-busybox_prepare_full := $(bb_gen)/full/.config
-$(busybox_prepare_full): $(BB_PATH)/busybox-full.config
+busybox_prepare_full := $(bb_gen)/fullctr/.config
+$(busybox_prepare_full): $(BB_PATH)/busybox-fullctr.config
 	@echo -e ${CL_YLW}"Prepare config for busybox binary"${CL_RST}
-	@rm -rf $(bb_gen)/full
+	@rm -rf $(bb_gen)/fullctr
 	@rm -f $(shell find $(abspath $(call intermediates-dir-for,EXECUTABLES,busybox)) -name "*.o")
 	@mkdir -p $(@D)
 	@cat $^ > $@ && echo "CONFIG_CROSS_COMPILER_PREFIX=\"$(BUSYBOX_CROSS_COMPILER_PREFIX)\"" >> $@
 	+make -C $(BB_PATH) prepare O=$(@D) $(BB_PREPARE_FLAGS)
 
-busybox_prepare_minimal := $(bb_gen)/minimal/.config
-$(busybox_prepare_minimal): $(BB_PATH)/busybox-minimal.config
-	@echo -e ${CL_YLW}"Prepare config for libbusybox"${CL_RST}
-	@rm -rf $(bb_gen)/minimal
-	@rm -f $(shell find $(abspath $(call intermediates-dir-for,STATIC_LIBRARIES,libbusybox)) -name "*.o")
+busybox_prepare_minimal := $(bb_gen)/minimalctr/.config
+$(busybox_prepare_minimal): $(BB_PATH)/busybox-minimalctr.config
+	@echo -e ${CL_YLW}"Prepare config for libbusyboxctr"${CL_RST}
+	@rm -rf $(bb_gen)/minimalctr
+	@rm -f $(shell find $(abspath $(call intermediates-dir-for,STATIC_LIBRARIES,libbusyboxctr)) -name "*.o")
 	@mkdir -p $(@D)
 	@cat $^ > $@ && echo "CONFIG_CROSS_COMPILER_PREFIX=\"$(BUSYBOX_CROSS_COMPILER_PREFIX)\"" >> $@
 	+make -C $(BB_PATH) prepare O=$(@D) $(BB_PREPARE_FLAGS)
@@ -122,10 +122,10 @@ endif
 
 # Build the static lib for the recovery tool
 
-BUSYBOX_CONFIG:=minimal
+BUSYBOX_CONFIG:=minimalctr
 BUSYBOX_SUFFIX:=static
 LOCAL_SRC_FILES := $(BUSYBOX_SRC_FILES)
-LOCAL_C_INCLUDES := $(bb_gen)/minimal/include $(BUSYBOX_C_INCLUDES)
+LOCAL_C_INCLUDES := $(bb_gen)/minimalctr/include $(BUSYBOX_C_INCLUDES)
 LOCAL_CFLAGS := -Dmain=busybox_driver $(BUSYBOX_CFLAGS)
 LOCAL_CFLAGS += \
   -DRECOVERY_VERSION \
@@ -136,7 +136,7 @@ LOCAL_CFLAGS += \
   -Dgetmntent_r=busybox_getmntent_r \
   -Dgenerate_uuid=busybox_generate_uuid
 LOCAL_ASFLAGS := $(BUSYBOX_AFLAGS)
-LOCAL_MODULE := libbusybox
+LOCAL_MODULE := libbusyboxctr
 LOCAL_MODULE_TAGS := eng debug
 LOCAL_STATIC_LIBRARIES := libcutils libc libm libselinux
 LOCAL_ADDITIONAL_DEPENDENCIES := $(busybox_prepare_minimal)
@@ -148,66 +148,16 @@ include $(BUILD_STATIC_LIBRARY)
 LOCAL_PATH := $(BB_PATH)
 include $(CLEAR_VARS)
 
-BUSYBOX_CONFIG:=full
+BUSYBOX_CONFIG:=fullctr
 BUSYBOX_SUFFIX:=bionic
 LOCAL_SRC_FILES := $(BUSYBOX_SRC_FILES)
-LOCAL_C_INCLUDES := $(bb_gen)/full/include $(BUSYBOX_C_INCLUDES)
+LOCAL_C_INCLUDES := $(bb_gen)/fullctr/include $(BUSYBOX_C_INCLUDES)
 LOCAL_CFLAGS := $(BUSYBOX_CFLAGS)
 LOCAL_ASFLAGS := $(BUSYBOX_AFLAGS)
-LOCAL_MODULE := busybox
-LOCAL_MODULE_TAGS := eng debug
-LOCAL_MODULE_PATH := $(TARGET_OUT_OPTIONAL_EXECUTABLES)
-LOCAL_SHARED_LIBRARIES := libc libcutils libm
-LOCAL_STATIC_LIBRARIES := libclearsilverregex libuclibcrpc libselinux
-LOCAL_ADDITIONAL_DEPENDENCIES := $(busybox_prepare_full)
-include $(BUILD_EXECUTABLE)
-
-BUSYBOX_LINKS := $(shell cat $(BB_PATH)/busybox-$(BUSYBOX_CONFIG).links)
-# nc is provided by external/netcat
-exclude := nc
-SYMLINKS := $(addprefix $(TARGET_OUT_OPTIONAL_EXECUTABLES)/,$(filter-out $(exclude),$(notdir $(BUSYBOX_LINKS))))
-$(SYMLINKS): BUSYBOX_BINARY := $(LOCAL_MODULE)
-$(SYMLINKS): $(LOCAL_INSTALLED_MODULE)
-	@echo -e ${CL_CYN}"Symlink:"${CL_RST}" $@ -> $(BUSYBOX_BINARY)"
-	@mkdir -p $(dir $@)
-	@rm -rf $@
-	$(hide) ln -sf $(BUSYBOX_BINARY) $@
-
-ALL_DEFAULT_INSTALLED_MODULES += $(SYMLINKS)
-
-# We need this so that the installed files could be picked up based on the
-# local module name
-ALL_MODULES.$(LOCAL_MODULE).INSTALLED := \
-    $(ALL_MODULES.$(LOCAL_MODULE).INSTALLED) $(SYMLINKS)
-
-
-# Static Busybox
-
-LOCAL_PATH := $(BB_PATH)
-include $(CLEAR_VARS)
-
-BUSYBOX_CONFIG:=full
-BUSYBOX_SUFFIX:=static
-LOCAL_SRC_FILES := $(BUSYBOX_SRC_FILES)
-LOCAL_C_INCLUDES := $(bb_gen)/full/include $(BUSYBOX_C_INCLUDES)
-LOCAL_CFLAGS := $(BUSYBOX_CFLAGS)
-LOCAL_CFLAGS += \
-  -Dgetusershell=busybox_getusershell \
-  -Dsetusershell=busybox_setusershell \
-  -Dendusershell=busybox_endusershell \
-  -Dgetmntent=busybox_getmntent \
-  -Dgetmntent_r=busybox_getmntent_r \
-  -Dgenerate_uuid=busybox_generate_uuid
-LOCAL_ASFLAGS := $(BUSYBOX_AFLAGS)
-LOCAL_FORCE_STATIC_EXECUTABLE := true
-LOCAL_MODULE := static_busybox
+LOCAL_MODULE := busyboxctr
 LOCAL_MODULE_STEM := busybox
-LOCAL_MODULE_TAGS := optional
-LOCAL_STATIC_LIBRARIES := libclearsilverregex libc libcutils libm libuclibcrpc libselinux
-LOCAL_MODULE_CLASS := UTILITY_EXECUTABLES
-LOCAL_MODULE_PATH := $(PRODUCT_OUT)/utilities
-LOCAL_UNSTRIPPED_PATH := $(PRODUCT_OUT)/symbols/utilities
-$(LOCAL_MODULE): busybox_prepare
-LOCAL_PACK_MODULE_RELOCATIONS := false
+LOCAL_MODULE_TAGS := eng debug
+LOCAL_SHARED_LIBRARIES := libc libcutils libm
+LOCAL_STATIC_LIBRARIES := libclearsilverregex.ctr libuclibcrpc.ctr libselinux
 LOCAL_ADDITIONAL_DEPENDENCIES := $(busybox_prepare_full)
 include $(BUILD_EXECUTABLE)

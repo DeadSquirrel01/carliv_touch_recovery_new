@@ -11,7 +11,7 @@ main(int argc, char **argv) {
     if (stripped)
         command = stripped + 1;
 
-    if (strcmp(command, "fstools") != 0) {
+    if (strcmp(command, "ctrfs") != 0) {
         struct fstools_cmd cmd = get_command(command);
         if (cmd.name)
             return cmd.main_func(argc, argv);

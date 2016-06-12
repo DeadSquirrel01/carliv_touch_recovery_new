@@ -187,8 +187,8 @@ void show_power_menu() {
 	
 	for (;;) {
 		int chosen_item = get_menu_selection(headers, power_items, 0, 0);
-		if (chosen_item == GO_BACK)
-            break;
+		if (chosen_item == GO_BACK || chosen_item == REFRESH)
+			break;
 		switch (chosen_item) {
 		  case POWER_ITEM_RECOVERY:
 		  {
@@ -261,7 +261,6 @@ int install_zip(const char* packagefilepath) {
 #define ITEM_CHOOSE_ZIP_USB   6
 
 void show_install_update_menu() {
-	struct stat upd;
     char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
     char* usb_path = get_usb_storage_path();
@@ -286,6 +285,8 @@ void show_install_update_menu() {
     for (;;)
     {
         int chosen_item = get_menu_selection(headers, install_menu_items, 0, 0);
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
+			break;
         switch (chosen_item)
         {
             case ITEM_SIG_CHECK:
@@ -310,12 +311,10 @@ void show_install_update_menu() {
                 show_multi_flash_menu();
                 break;
             case ITEM_CHOOSE_ZIP_INT:
-                if (extra_path != NULL)
-                    show_choose_zip_menu(extra_path);
+                show_choose_zip_menu(extra_path);
                 break;
             case ITEM_CHOOSE_ZIP_USB:
-                if (usb_path != NULL)
-                    show_choose_zip_menu(usb_path);
+                show_choose_zip_menu(usb_path);
                 break;
             default:
                 return;
@@ -352,8 +351,8 @@ void show_wipe_menu() {
 
 	for (;;) {
 		int chosen_item = get_menu_selection(headers, wipe_items, 0, 0);
-		if (chosen_item == GO_BACK)
-            break;
+		if (chosen_item == GO_BACK || chosen_item == REFRESH)
+			break;
 		switch (chosen_item) {
 		  case WIPE_ALL_DATA:
 			wipe_data(ui_text_visible());
@@ -697,7 +696,7 @@ void show_multi_flash_menu() {
         for (;;)
         {
             chosen_item = get_menu_selection(headers, list, 0, 0);
-            if (chosen_item == GO_BACK)
+            if (chosen_item == GO_BACK || chosen_item == REFRESH)
                 break;
             if (chosen_item == 1)
                 break;
@@ -931,7 +930,7 @@ void show_mount_usb_storage_menu() {
 
     for (;;) {
         int chosen_item = get_menu_selection(headers, list, 0, 0);
-        if (chosen_item == GO_BACK || chosen_item == 0)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH || chosen_item == 0)
             break;
     }
 
@@ -996,7 +995,7 @@ static int exec_cmd(const char* path, char* const argv[]) {
     }
     waitpid(child, &status, 0);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        printf("%s failed with status %d\n", path, WEXITSTATUS(status));
+        //printf("%s failed with status %d\n", path, WEXITSTATUS(status));
     }
     return WEXITSTATUS(status);
 }
@@ -1082,24 +1081,20 @@ int format_device(const char *device, const char *path, const char *fs_type) {
     }
 
     if (strcmp(v->fs_type, "f2fs") == 0) {
-        char bytes_reserved[20], num_sectors[20];
-		const char* f2fs_argv[6] = {"mkfs.f2fs", "-t1"};
-		if (length < 0) {
-			snprintf(bytes_reserved, sizeof(bytes_reserved), "%zd", -length);
-			f2fs_argv[2] = "-r";
-			f2fs_argv[3] = bytes_reserved;
-			f2fs_argv[4] = v->device;
-			f2fs_argv[5] = NULL;
-		} else {
-			/* num_sectors can be zero which mean whole device space */
-			snprintf(num_sectors, sizeof(num_sectors), "%zd", length / 512);
-			f2fs_argv[2] = v->device;
-			f2fs_argv[3] = num_sectors;
-			f2fs_argv[4] = NULL;
+        if (length < 0) {
+			LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
+			return -1;
+		}
+		char *num_sectors;
+		if (asprintf(&num_sectors, "%zd", length / 512) <= 0) {
+			LOGE("format_volume: failed to create %s command for %s\n", v->fs_type, v->device);
+			return -1;
 		}
 		const char *f2fs_path = "/sbin/mkfs.f2fs";
+		const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", v->device, num_sectors, NULL};
 
 		result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
+		free(num_sectors);
         if (result != 0) {
             LOGE("format_volume: make f2fs failed on %s\n", v->device);
             return -1;
@@ -1313,7 +1308,7 @@ void show_partition_menu() {
         }
 
         int chosen_item = get_menu_selection(headers, options, 0, 0);
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
         if (chosen_item == (mountable_volumes + formatable_volumes)) {
             if (!is_data_media()) {
@@ -1376,6 +1371,10 @@ void show_partition_menu() {
 
             sprintf(confirm_string, "%s - %s", v->mount_point, confirm_format);
 
+            if (strcmp(v->fs_type, "auto") == 0) {
+                if (can_partition(v->mount_point)) format_sdcard(v->mount_point);
+                continue;
+            }
             if (!confirm_selection(confirm_string, confirm))
                 continue;
             ui_print("Formatting %s...\n", v->mount_point);
@@ -1435,7 +1434,7 @@ static int show_nandroid_advanced_backup_menu(const char* path) {
 	    	backup_item[4] = "Perform Backup";
 	    	
 	    int chosen_item = get_menu_selection(headers, backup_item, 0, 0);
-	    if (chosen_item == GO_BACK)
+	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 	    switch (chosen_item) {
 			case 0: 
@@ -1534,7 +1533,7 @@ static int show_nandroid_advanced_restore_menu(const char* path) {
 	    	restore_item[4] = "Start Restore";
 	    	
 	    int chosen_item = get_menu_selection(headers, restore_item, 0, 0);
-	    if (chosen_item == GO_BACK)
+	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 	    switch (chosen_item) {
 			case 0: 
@@ -1614,7 +1613,7 @@ static int show_mtk_advanced_backup_menu(const char* path) {
 	    	mtkb_item[4] = "Perform Backup";
 	    	
 	    int chosen_item = get_menu_selection(headers, mtkb_item, 0, 0);
-	    if (chosen_item == GO_BACK)
+	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 	    switch (chosen_item) {
 			case 0: 
@@ -1713,7 +1712,7 @@ static int show_mtk_advanced_restore_menu(const char* path) {
 	    	mtkr_item[4] = "Start Restore";
 	    	
 	    int chosen_item = get_menu_selection(headers, mtkr_item, 0, 0);
-	    if (chosen_item == GO_BACK)
+	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 	    switch (chosen_item) {
 			case 0: 
@@ -1789,7 +1788,7 @@ static void show_mtk_special_backup_restore_menu() {
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 		switch (chosen_item)
         	{	
@@ -1872,7 +1871,7 @@ static void show_nandroid_advanced_menu() {
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 		switch (chosen_item)
         	{	
@@ -1958,7 +1957,7 @@ void show_nandroid_menu() {
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
         switch (chosen_item)
         {
@@ -2054,7 +2053,7 @@ static int flash_choosen_image(const char* image, const char* partition) {
 		ui_print("Error while flashing %s image!", name);
 		return ret;
 	}
-	ui_print("\n%s image flashed!\n", name);
+	ui_print("\n[*] %s image flashed!\n", name);
 	return 0;
 }
 
@@ -2065,10 +2064,29 @@ static int ctr_flash_image(const char* image, int boot, int recovery) {
     const char* imgname = basename(image);
 
 	int ret;
-    
-    if (boot && 0 != (ret = flash_choosen_image(image, "/boot"))) return ret;
-
-	if (recovery && 0 != (ret = flash_choosen_image(image, "/recovery"))) return ret;
+	char confirm[PATH_MAX];
+    sprintf(confirm, "Yes - Flash it!");
+	if (boot) {
+		if(strstr(imgname, "boot")) { 
+			if (0 != (ret = flash_choosen_image(image, "/boot"))) return ret;
+		} else {
+			if (confirm_selection("Are you sure this is a boot image?", confirm)) {	
+			    if (0 != (ret = flash_choosen_image(image, "/boot"))) return ret;
+			}
+		}
+		
+	}
+	
+	if (recovery) {
+		if(strstr(imgname, "recovery")) { 
+			if (0 != (ret = flash_choosen_image(image, "/recovery"))) return ret;
+		} else {
+			if (confirm_selection("Are you sure this is a recovery image?", confirm)) {	
+			    if (0 != (ret = flash_choosen_image(image, "/recovery"))) return ret;
+			}
+		}
+		
+	}
 
     sync();
     ui_reset_progress();
@@ -2094,7 +2112,7 @@ static void choose_image_path_menu(const char* image) {
 
 	for (;;) {
 		int chosen_item = get_menu_selection(headers, partition_items, 0, 0);
-		if (chosen_item == GO_BACK)
+		if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 		switch (chosen_item) {
 		  case 0:
@@ -2148,7 +2166,7 @@ static void show_flash_image_menu() {
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
         switch (chosen_item)
         {
@@ -2163,6 +2181,105 @@ static void show_flash_image_menu() {
                 break;
         }
     }
+}
+
+void format_sdcard(const char* volume) {
+    // this will also ensure it is not /data/media
+    if (!can_partition(volume))
+        return;
+	if (is_data_media_volume_path(volume))
+        return;
+	
+    Volume *v = volume_for_path(volume);    
+	if (v == NULL || strcmp(v->fs_type, "auto") != 0)
+        return;
+
+
+    const char* headers[] = {"Format device:", volume, "", NULL };
+
+    char* list[] = { "default",
+			        "ext2",
+			        "ext3",
+			        "ext4",
+			        "vfat",
+			        "exfat",
+			        "ntfs",
+					"f2fs",
+					NULL
+    };
+
+    int ret = -1;
+    char cmd[PATH_MAX];
+    struct stat sv;
+    ssize_t length = 0;
+	if (v->length != 0) length = v->length;
+    int chosen_item = get_menu_selection(headers, list, 0, 0);
+    if (chosen_item == GO_BACK || chosen_item == REFRESH)
+        return;
+    if (!confirm_selection( "Confirm formatting?", "Yes - Format device"))
+        return;
+        
+	if (ensure_path_unmounted(v->mount_point) != 0)
+        return;
+
+    switch (chosen_item)
+    {
+        case 0:
+            ret = format_volume(v->mount_point);
+            break;
+        case 1:
+            ret = format_unknown_device(v->device, v->mount_point, "ext2");
+            break;
+        case 2:
+            ret = format_unknown_device(v->device, v->mount_point, "ext3");
+            break;
+        case 3:
+	        ret = make_ext4fs(v->device, length, v->mount_point, sehandle);
+            break;
+        case 4:
+            if (stat("/sbin/newfs_msdos", &sv) == 0) {
+				sprintf(cmd, "/sbin/newfs_msdos -F 32 -O android -c 8 %s", v->device);
+                ret = __system(cmd);
+			}
+            break;
+        case 5:
+            if (stat("/sbin/mkfs.exfat", &sv) == 0) {
+				sprintf(cmd, "/sbin/mkfs.exfat %s", v->device);
+                ret = __system(cmd);
+			}
+            break;
+        case 6:
+            if (stat("/sbin/mkfs.ntfs", &sv) == 0) {
+				const char *ntfs_path = "/sbin/mkfs.ntfs";
+				const char* const ntfs_argv[] = {"mkfs.ntfs", "-f", v->device, NULL};
+		
+				ret = exec_cmd(ntfs_path, (char* const*)ntfs_argv);
+			}
+            break;
+        case 7:
+            if (stat("/sbin/mkfs.f2fs", &sv) == 0) {
+				if (length < 0) {
+					LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
+					return;
+				}
+				char *num_sectors;
+				if (asprintf(&num_sectors, "%zd", length / 512) <= 0) {
+					LOGE("format_volume: failed to create %s command for %s\n", v->fs_type, v->device);
+					return;
+				}
+				const char *f2fs_path = "/sbin/mkfs.f2fs";
+				const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", v->device, num_sectors, NULL};
+		
+				ret = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
+				free(num_sectors);
+			}
+            break;
+    }
+
+    if (ret)
+        ui_print("Could not format %s (%s)\n", volume, list[chosen_item]);
+    else
+        ui_print("Done formatting %s (%s)\n", volume, list[chosen_item]);
 }
 
 int can_partition(const char* volume) {
@@ -2310,7 +2427,7 @@ static void custom_aroma_menu() {
     for (;;) {
         //header function so that "Toggle menu" doesn't reset to main menu on action selected
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
         switch (chosen_item)
         {
@@ -2360,7 +2477,7 @@ void show_carliv_menu() {
     for (;;)
     {
 		int chosen_item = get_menu_selection(headers, carliv_list, 0, 0);
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
 		switch (chosen_item)
         {
@@ -2435,7 +2552,7 @@ void show_advanced_menu() {
     for (;;)
     {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
-        if (chosen_item == GO_BACK)
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
         switch (chosen_item)
         {
@@ -2493,7 +2610,6 @@ void write_fstab_root(char *path, FILE *file) {
 
     fprintf(file, "%s ", device);
     fprintf(file, "%s ", path);
-    // special case rfs cause auto will mount it as vfat on samsung.
     fprintf(file, "%s rw\n", vol->fs_type2 != NULL && strcmp(vol->fs_type, "rfs") != 0 ? "auto" : vol->fs_type);
 }
 

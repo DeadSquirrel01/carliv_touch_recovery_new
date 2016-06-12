@@ -72,7 +72,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v6.1
+RECOVERY_VERSION := $(RECOVERY_NAME) v6.2
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -190,7 +190,7 @@ LOCAL_STATIC_LIBRARIES := \
     libpng \
     libpixelflinger_static \
     libedify \
-    libbusybox \
+    libbusyboxctr \
     libmkyaffs2image \
     libunyaffs \
     libflashutils \
@@ -226,6 +226,18 @@ LOCAL_STATIC_LIBRARIES := \
     libext2_blkid \
 	libext2_uuid
 
+LOCAL_STATIC_LIBRARIES += \
+	libext2fs \
+	libe2fsck_static \
+	libmke2fs_static \
+	libtune2fs
+    	
+LOCAL_WHOLE_STATIC_LIBRARIES += \
+    libexfat_mount_static \
+    libexfat_mkfs_static \
+    libexfat_fsck_static \
+	libexfat_static
+	
 ifeq ($(ENABLE_LOKI_RECOVERY),true)
   LOCAL_CFLAGS += -DENABLE_LOKI
   LOCAL_STATIC_LIBRARIES += libloki_static
@@ -258,7 +270,7 @@ endif
 LOCAL_C_INCLUDES += system/extras/ext4_utils
 LOCAL_C_INCLUDES += external/boringssl/include
 
-RECOVERY_LINKS := bu make_ext4fs edify busybox flash_image dump_image mkyaffs2image unyaffs erase_image nandroid fstools reboot volume setprop getprop start stop minizip setup_adbd fsck_msdos newfs_msdos sdcard pigz
+RECOVERY_LINKS := bu make_ext4fs edify busyboxctr flash_image dump_image mkyaffs2image unyaffs erase_image nandroid reboot volume setprop getprop start stop minizip setup_adbd fsck_msdos newfs_msdos sdcard pigz fsck.exfat mkfs.exfat exfat-fuse e2fsck mke2fs tune2fs
 
 ifeq ($(BOARD_INCLUDE_CRYPTO), true)
 RECOVERY_LINKS += minivold vdc
@@ -267,10 +279,9 @@ endif
 # nc is provided by external/netcat
 RECOVERY_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(RECOVERY_LINKS))
 
-BUSYBOX_LINKS := $(shell cat $(LOCAL_PATH)/busybox/busybox-minimal.links)
-exclude := tune2fs mke2fs
+BUSYBOX_LINKS := $(shell cat $(LOCAL_PATH)/busybox/busybox-minimalctr.links)
+exclude := mke2fs
 RECOVERY_BUSYBOX_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(filter-out $(exclude),$(notdir $(BUSYBOX_LINKS))))
-RECOVERY_FSTOOLS_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(FSTOOLS_LINKS))
 
 LOCAL_ADDITIONAL_DEPENDENCIES += \
     permissive.sh \
@@ -278,7 +289,8 @@ LOCAL_ADDITIONAL_DEPENDENCIES += \
     killrecovery.sh \
     nandroid-md5.sh \
     parted \
-    sdparted     
+    sdparted \
+    ctrfs    
 
 LOCAL_ADDITIONAL_DEPENDENCIES += carliv
 
@@ -298,20 +310,12 @@ $(RECOVERY_SYMLINKS):
 	$(hide) ln -sf $(RECOVERY_BINARY) $@
 
 # Now let's do recovery symlinks
-$(RECOVERY_BUSYBOX_SYMLINKS): BUSYBOX_BINARY := busybox
+$(RECOVERY_BUSYBOX_SYMLINKS): BUSYBOX_BINARY := busyboxctr
 $(RECOVERY_BUSYBOX_SYMLINKS):
 	@echo "Symlink: $@ -> $(BUSYBOX_BINARY)"
 	@mkdir -p $(dir $@)
 	@rm -rf $@
 	$(hide) ln -sf $(BUSYBOX_BINARY) $@ 
-
-# Now let's do fstools symlinks
-$(RECOVERY_FSTOOLS_SYMLINKS): FSTOOLS_BINARY := fstools
-$(RECOVERY_FSTOOLS_SYMLINKS):
-	@echo "Symlink: $@ -> $(FSTOOLS_BINARY)"
-	@mkdir -p $(dir $@)
-	@rm -rf $@
-	$(hide) ln -sf $(FSTOOLS_BINARY) $@ 
 	
 #permissive.sh
 include $(CLEAR_VARS)

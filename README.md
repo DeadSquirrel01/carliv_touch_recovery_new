@@ -1,6 +1,6 @@
 **Carliv Touch Recovery**
 
-- version 6.1 is for Marshmallow (cm 13 or aicp-mm6.0).
+- version 6.2 is for Marshmallow (cm 13 or aicp-mm6.0).
 The version starting number is related to android version.
 
 This is a CWM based recovery and I did put up some work to update it to marshmallow (cm-13) after official cwm development stopped at kitkat. It works with *MARSHMALLOW* kernels and it builds with cm 13 or aicp-mm6.0. 
@@ -12,7 +12,7 @@ Features:
 - full touch menu ported by me from PhilZ touch Recovery. The old Napstar-xda touch module was good but it's quite old and to update that was too much work. Actually There is a version 4 with that touch module, all working, but the touch doesn't work with some input drivers and I had to give up on it for the new and improved version from PhilZ.
 - all cwm functionalities are up and working (adb, sideload, backup, restore, install, mass storage...). There is no mtp and if your phone doesn't have an external sdcard you can't connect it to PC while is in recovery mode. But there is usb-otg support, of course if your phone was shipped with that.
 - added new menu for backup and restore advanced, to use it for backing or restoring only a specific partition and I also ported from PhilZ the multizip flashing function.
-- in *Carliv menu* there is now a new section for flashing boot and recovery images. It is in early stage but it works using the nandroid restore function (I'll improve this one later). All you need is to create a folder in your storage root or sdcard root and to place the images you want to flash in there: IMPORTANT use the name boot.img and recovery.img for them (in the future I'll rewrite this to use it with any name).
+- in *Carliv menu* there is now a new section for flashing boot and recovery images. It is a feature that I needed during many recovery builds testing. I wanted an easier way to flash other image without booting to android and using an app like RashR. You can browse your storage locations for any image and after choose you will have to select on wich partition should  that be flashed. I added multiple confirmations check to avoid flashing on wrong partition. This feature works only with boot and recovery images. I won't add other partitions to this because for other things there are multiple backup restore functions.
 - for MTK phones (if the flag is used in Boardconfig) there is a new menu to backup and restore some important partitions like uboot, nvram an secro because they are involved in restoring a lost IMEI, and also the logo partition which may often get broken by bad ported ROMs.
 - besides these all my old specific menus (aroma, rainbow...) are still in place.
 - added support for dencrypting and mounting data partition using the builtin minivold from cyanogenmod with vdc commands - the ideea came from [this post of Lekensteyn](http://forum.xda-developers.com/showpost.php?p=47807114&postcount=2). Tested and working well with text ar hex passwords, and maybe will work with pin too but I don't think it will work with pattern (obviously).
@@ -132,7 +132,12 @@ or
 
 As you can see the internal storage can be sdcard or internal_sd and external sdcard can be sdcard or external_sd, but internal storage can't be external_sd or external sdcard internal_sd.
 If your phone has OTG support you can use that too defining it like this
+
 `/usb-otg		vfat	/dev/block/sda1	/dev/block/sda`
+
 or this
+
 `/usbdisk		vfat	/dev/block/sda1	/dev/block/sda`
--check with your phone booted up in Android and a OTG USB mounted to see in /sys/class/block how to set device for this (the dev/block/sdx part). The recovery has fat, fat32, exfat and ntfs support builtin - I only tested fat32. And even if I know it's common sense I have to mention it: it will work only with portable USB flash drives, not portables HDD (no spinning, got it?) - I couldn't test what is the top capacity in GB but for a 32 GB it works very well.
+
+-check with your phone booted up in Android and a OTG USB mounted to see in [/sys/class/block] or [dev/block] how to set device for this (the dev/block/sdx part). 
+The recovery has fat32, exfat and ntfs support builtin (also f2fs for file system). You can define your usb-otg and/or external sdcard as `auto` instead of `vfat` and it will work with any of these formats. I tested a portable HDD self powered and it works (120 GB) as usb-otg. Anyway that is available only for zip and image flashing. Maybe I'll make it to work for backup and restore too.

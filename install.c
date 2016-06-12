@@ -385,6 +385,14 @@ install_package(const char* path)
         LOGE("failed to open last_install: %s\n", strerror(errno));
     }
     int result = really_install_package(path);
+
+#ifdef ENABLE_LOKI
+    if (result == INSTALL_SUCCESS && loki_support_enabled() > 0) {
+        ui_print("Checking if loki-fying is needed\n");
+        result = loki_check();
+    }
+#endif
+
     if (install_log) {
         fputc(result == INSTALL_SUCCESS ? '1' : '0', install_log);
         fputc('\n', install_log);

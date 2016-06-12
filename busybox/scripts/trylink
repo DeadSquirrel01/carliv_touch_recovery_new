@@ -25,7 +25,7 @@ debug=false
 # -fPIC                         position-independent code
 # --enable-new-dtags            ?
 # -z,combreloc                  ?
-# -soname="libbusybox.so.$BB_VER"
+# -soname="libbusyboxctr.so.$BB_VER"
 # --undefined=lbb_main          Seed name to start pulling from
 #                               (otherwise we'll need --whole-archive)
 # -static                       Not used, but may be useful! manpage:
@@ -221,15 +221,15 @@ if test "$CONFIG_BUILD_LIBBUSYBOX" = y; then
 	echo "Cannot make directory $sharedlib_dir"
 	exit 1
     }
-    ln -s "libbusybox.so.$BB_VER" "$sharedlib_dir"/libbusybox.so 2>/dev/null
+    ln -s "libbusyboxctr.so.$BB_VER" "$sharedlib_dir"/libbusyboxctr.so 2>/dev/null
 
-    EXE="$sharedlib_dir/libbusybox.so.${BB_VER}_unstripped"
+    EXE="$sharedlib_dir/libbusyboxctr.so.${BB_VER}_unstripped"
     try $CC $CFLAGS $LDFLAGS \
 	    -o $EXE \
 	    -shared -fPIC \
 	    -Wl,--enable-new-dtags \
 	    -Wl,-z,combreloc \
-	    -Wl,-soname="libbusybox.so.$BB_VER" \
+	    -Wl,-soname="libbusyboxctr.so.$BB_VER" \
 	    -Wl,--undefined=lbb_main \
 	    $SORT_COMMON \
 	    $SORT_SECTION \
@@ -241,9 +241,9 @@ if test "$CONFIG_BUILD_LIBBUSYBOX" = y; then
 	cat $EXE.out
 	exit 1
     }
-    $STRIP -s --remove-section=.note --remove-section=.comment $EXE -o "$sharedlib_dir/libbusybox.so.$BB_VER"
-    chmod a+x "$sharedlib_dir/libbusybox.so.$BB_VER"
-    echo "libbusybox: $sharedlib_dir/libbusybox.so.$BB_VER"
+    $STRIP -s --remove-section=.note --remove-section=.comment $EXE -o "$sharedlib_dir/libbusyboxctr.so.$BB_VER"
+    chmod a+x "$sharedlib_dir/libbusyboxctr.so.$BB_VER"
+    echo "libbusybox: $sharedlib_dir/libbusyboxctr.so.$BB_VER"
 fi
 
 if test "$CONFIG_FEATURE_SHARED_BUSYBOX" = y; then
@@ -304,7 +304,7 @@ int main(int argc, char **argv)
     done <applet_lst.tmp
 fi
 
-# libbusybox.so is needed only for -lbusybox at link time,
+# libbusyboxctr.so is needed only for -lbusybox at link time,
 # it is not needed at runtime. Deleting to reduce confusion.
-rm "$sharedlib_dir"/libbusybox.so 2>/dev/null
+rm "$sharedlib_dir"/libbusyboxctr.so 2>/dev/null
 exit 0 # or else we may confuse make

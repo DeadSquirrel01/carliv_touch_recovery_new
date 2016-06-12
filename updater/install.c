@@ -53,10 +53,8 @@
 static char bakfiles[PATH_MAX][512];
 static int totalbaks = 0;
 
-#ifdef USE_EXT4
 #include "make_ext4fs.h"
 #include "wipe.h"
-#endif
 
 void uiPrint(State* state, char* buffer) {
     char* line = strtok(buffer, "\n");
@@ -272,11 +270,10 @@ static int exec_cmd(const char* path, char* const argv[]) {
     }
     waitpid(child, &status, 0);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        printf("%s failed with status %d\n", path, WEXITSTATUS(status));
+        //printf("%s failed with status %d\n", path, WEXITSTATUS(status));
     }
     return WEXITSTATUS(status);
 }
-
 
 // format(fs_type, partition_type, location, fs_size, mount_point)
 //
@@ -347,7 +344,6 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
             goto done;
         }
         result = location;
-#ifdef USE_EXT4
     } else if (strcmp(fs_type, "ext4") == 0) {
         int status = make_ext4fs(location, atoll(fs_size), mount_point, sehandle);
         if (status != 0) {
@@ -359,18 +355,13 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
         result = location;
     } else if (strcmp(fs_type, "f2fs") == 0) {
         char *num_sectors;
-        char bytes_reserved[10] = {0};
         if (asprintf(&num_sectors, "%lld", atoll(fs_size) / 512) <= 0) {
             printf("format_volume: failed to create %s command for %s\n", fs_type, location);
             result = strdup("");
             goto done;
         }
-        if (atoll(num_sectors) <=0) {
-            snprintf(bytes_reserved, sizeof(bytes_reserved), "%lld", -atoll(fs_size));
-        }
         const char *f2fs_path = "/sbin/mkfs.f2fs";
-        const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", "-r", bytes_reserved,
-                location, NULL};
+        const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", location, num_sectors, NULL};
         int status = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
         free(num_sectors);
         if (status != 0) {
@@ -380,7 +371,6 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
             goto done;
         }
         result = location;
-#endif
     } else {
         printf("%s: unsupported fs_type \"%s\" partition_type \"%s\"",
                 name, fs_type, partition_type);

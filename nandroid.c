@@ -162,7 +162,7 @@ static int mkyaffs2image_wrapper(const char* backup_path, const char* backup_fil
     return __pclose(fp);
 }
 
-static int do_tar_compress(char* command, int callback) {
+static int do_tar_compress(char* command, int callback, const char* backup_file_image) {
     char buf[PATH_MAX];
 
     set_perf_mode(1);
@@ -187,14 +187,14 @@ static int tar_compress_wrapper(const char* backup_path, const char* backup_file
     char tmp[PATH_MAX];
     sprintf(tmp, "cd $(dirname %s) ; touch %s.tar ; set -o pipefail ; (tar -cpv --exclude=data/data/com.google.android.music/files/* %s $(basename %s) | split -a 1 -b 1000000000 /proc/self/fd/0 %s.tar.) 2> /proc/self/fd/1 ; exit $?", backup_path, backup_file_image, strcmp(backup_path, "/data") == 0 && is_data_media() ? "--exclude=data/media" : "", backup_path, backup_file_image);
 
-    return do_tar_compress(tmp, callback);
+    return do_tar_compress(tmp, callback, backup_file_image);
 }
 
 static int tar_gzip_compress_wrapper(const char* backup_path, const char* backup_file_image, int callback) {
     char tmp[PATH_MAX];
     sprintf(tmp, "cd $(dirname %s) ; touch %s.tar.gz ; set -o pipefail ; (tar -cpv --exclude=data/data/com.google.android.music/files/* %s $(basename %s) | pigz -c | split -a 1 -b 1000000000 /proc/self/fd/0 %s.tar.gz.) 2> /proc/self/fd/1 ; exit $?", backup_path, backup_file_image, strcmp(backup_path, "/data") == 0 && is_data_media() ? "--exclude=data/media" : "", backup_path, backup_file_image);
 
-    return do_tar_compress(tmp, callback);
+    return do_tar_compress(tmp, callback, backup_file_image);
 }
 
 static int tar_dump_wrapper(const char* backup_path, const char* backup_file_image, int callback) {
@@ -581,6 +581,12 @@ int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram,
             ui_print("There may not be enough free space to complete backup... continuing...\n");
     }
     char tmp[PATH_MAX];
+    struct stat sn;
+    sprintf(tmp, "%s/%s", get_primary_storage_path(), NANDROID_HIDE_PROGRESS_FILE);
+    int callback = stat(tmp, &sn) != 0;
+    char backup_file_image[PATH_MAX];
+	Volume* vol = volume_for_path("/data");
+    sprintf(backup_file_image, "%s/nvdata.%s", backup_path, vol->fs_type == NULL ? "auto" : vol->fs_type);
     ensure_directory(backup_path);
     ui_set_background(BACKGROUND_ICON_INSTALLING);
 
@@ -598,8 +604,9 @@ int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram,
 	        return print_and_error(NULL, ret);
 		} else {
 			char nvd[PATH_MAX];
-		    sprintf(nvd, "set -o pipefail ; tar -cpv data/nvram | pigz -1c  > %s/nvdata.tar.gz", backup_path);
-		    if (0 != (ret = __system(nvd))) return ret;
+		    sprintf(nvd, "cd / ; touch %s.tar.gz ; set -o pipefail ; (tar cv data/nvram | pigz -c -1 | split -a 1 -b 1000000000 /proc/self/fd/0 %s.tar.gz.) 2> /proc/self/fd/1 ; exit $?", backup_file_image, backup_file_image);
+		    if (0 != (ret = do_tar_compress(nvd, callback, backup_file_image))) 
+		    return print_and_error(NULL, ret);
 	    }
     }
 
@@ -680,7 +687,7 @@ static int unyaffs_wrapper(const char* backup_file_image, const char* backup_pat
     return __pclose(fp);
 }
 
-static int do_tar_extract(char* command, int callback) {
+static int do_tar_extract(char* command, const char* backup_file_image, const char* backup_path, int callback) {
     char buf[PATH_MAX];
 
     set_perf_mode(1);
@@ -705,14 +712,14 @@ static int tar_gzip_extract_wrapper(const char* backup_file_image, const char* b
     char tmp[PATH_MAX];
     sprintf(tmp, "cd $(dirname %s) ; set -o pipefail ; cat %s* | pigz -d -c | tar -xpv ; exit $?", backup_path, backup_file_image);
 
-    return do_tar_extract(tmp, callback);
+    return do_tar_extract(tmp, backup_file_image, backup_path, callback);
 }
 
 static int tar_extract_wrapper(const char* backup_file_image, const char* backup_path, int callback) {
     char tmp[PATH_MAX];
     sprintf(tmp, "cd $(dirname %s) ; set -o pipefail ; cat %s* | tar -xpv ; exit $?", backup_path, backup_file_image);
 
-    return do_tar_extract(tmp, callback);
+    return do_tar_extract(tmp, backup_file_image, backup_path, callback);
 }
 
 static int tar_undump_wrapper(const char* backup_file_image, const char* backup_path, int callback) {
@@ -754,7 +761,7 @@ static int nandroid_restore_partition_extended(const char* backup_path, const ch
     char* name = basename(mount_point);
 
     nandroid_restore_handler restore_handler = NULL;
-    const char *filesystems[] = { "yaffs2", "ext2", "ext3", "ext4", "vfat", "exfat", "rfs", "f2fs", NULL };
+    const char *filesystems[] = { "yaffs2", "ext2", "ext3", "ext4", "f2fs", "ntfs", "vfat", "exfat", "rfs", "auto", NULL };
     const char* backup_filesystem = NULL;
     Volume *vol = volume_for_path(mount_point);
     const char *device = NULL;
@@ -807,7 +814,7 @@ static int nandroid_restore_partition_extended(const char* backup_path, const ch
     }
 
 
-    if (vol == NULL)
+    if (vol == NULL || 0 == strcmp(vol->fs_type, "auto"))
         backup_filesystem = NULL;
     else if (0 == strcmp(vol->mount_point, "/data") && is_data_media())
         backup_filesystem = NULL;
@@ -1077,6 +1084,14 @@ int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram
 
     ui_print("-- Start mtk partitions restore from %s.\n", backup_path);
 
+	nandroid_restore_handler restore_handler = NULL;
+    struct stat sn;
+    sprintf(tmp, "%s/%s", get_primary_storage_path(), NANDROID_HIDE_PROGRESS_FILE);
+    int callback = stat(tmp, &sn) != 0;
+    char backup_file_image[PATH_MAX];
+    const char *filesystems[] = { "yaffs2", "ext2", "ext3", "ext4", "f2fs", "ntfs", "vfat", "exfat", "rfs", "auto", NULL };
+    const char *filesystem;
+
     int ret;
 	if (uboot && 0 != (ret = nandroid_restore_partition(backup_path, "/uboot")))
         return print_and_error(NULL, ret);
@@ -1092,8 +1107,17 @@ int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram
 	        return print_and_error(NULL, ret);
 		} else {
 			char nvd[PATH_MAX];
-		    sprintf(nvd, "set -o pipefail ; rm -rf data/nvram ; pigz -d -c < %s/nvdata.tar.gz | tar -xpv", backup_path);
-		    if (0 != (ret = __system(nvd))) return ret;
+			int i = 0;
+		    while ((filesystem = filesystems[i]) != NULL) {
+		        sprintf(backup_file_image, "%s/nvdata.%s.tar.gz", backup_path, filesystem);
+		        if (0 == stat(backup_file_image, &sn)) {
+					restore_handler = tar_gzip_extract_wrapper;
+		            sprintf(nvd, "cd / ; rm -rf data/nvram ; set -o pipefail ; cat %s* | pigz -d -c | tar xv ; exit $?", backup_file_image);
+		            break;
+		        }
+		        i++;
+		    }
+		    if (0 != (ret = do_tar_extract(nvd, backup_file_image, "/data", callback))) return print_and_error(NULL, ret);
 	    }
     }
 
