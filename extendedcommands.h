@@ -52,7 +52,7 @@ void show_multi_flash_menu();
 
 int format_device(const char *device, const char *path, const char *fs_type);
 int format_unknown_device(const char *device, const char* path, const char *fs_type);
-
+void format_sdcard(const char* volume);
 int has_datadata();
 void handle_failure(int ret);
 void process_volumes();

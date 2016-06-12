@@ -43,6 +43,7 @@ extern int nandroid_main(int argc, char **argv);
 extern int pigz_main(int argc, char **argv);
 extern int sdcard_main(int argc, char **argv);
 extern int mksh_main(int argc, char **argv);
+
 #ifdef BOARD_INCLUDE_CRYPTO
 extern int vdc_main(int argc, char **argv);
 #endif

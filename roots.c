@@ -247,7 +247,7 @@ int try_mount(const char* device, const char* mount_point, const char* fs_type, 
     }
     if (ret == 0)
         return 0;
-    LOGW("failed to mount %s (%s)\n", device, strerror(errno));
+    //LOGW("failed to mount %s (%s)\n", device, strerror(errno));
     return ret;
 }
 
@@ -294,6 +294,20 @@ int is_data_media_volume_path(const char* path) {
 	if (!is_data_media())
         return 0;
     return strcmp(v->fs_type, "datamedia") == 0;
+}
+
+static int exec_cmd(const char* path, char* const argv[]) {
+    int status;
+    pid_t child;
+    if ((child = vfork()) == 0) {
+        execv(path, argv);
+        _exit(-1);
+    }
+    waitpid(child, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        //LOGE("%s failed with status %d\n", path, WEXITSTATUS(status));
+    }
+    return WEXITSTATUS(status);
 }
 
 int ensure_path_mounted(const char* path) {
@@ -368,7 +382,7 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
                strcmp(v->fs_type, "vfat") == 0) {
         if ((result = try_mount(v->device, mount_point, v->fs_type, v->fs_options)) == 0)
             return 0;
-        if ((result = try_mount(v->device2, mount_point, v->fs_type, v->fs_options)) == 0)
+        if ((result = try_mount(v->device, mount_point, v->fs_type2, v->fs_options2)) == 0)
             return 0;
         if ((result = try_mount(v->device2, mount_point, v->fs_type2, v->fs_options2)) == 0)
             return 0;
@@ -380,7 +394,22 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
             sprintf(mount_cmd, "mount %s %s", v->device, mount_point);
         else
             sprintf(mount_cmd, "mount %s", v->mount_point);
-        return __system(mount_cmd);
+            
+		if ((result = __system(mount_cmd)) != 0) {
+            if (strcmp(v->fs_type, "auto") == 0) {
+                struct stat s;
+                if (stat("/sbin/mount.exfat", &s) == 0) {
+					const char *exfat_path = "/sbin/mount.exfat";
+					const char* const exfat_argv[] = {"mount.exfat", "-o big_writes,default_permissions,max_read=131072,max_write=131072", v->device, mount_point, NULL};
+					result = exec_cmd(exfat_path, (char* const*)exfat_argv);
+                }
+                if (result != 0 && stat("/sbin/mount.ntfs", &s) == 0) {
+					sprintf(mount_cmd, "/sbin/mount.ntfs -o rw,umask=0 %s %s", v->device, mount_point);
+	                result = __system(mount_cmd);
+                }
+            }
+        }
+        return result;
     }
 
     LOGE("unknown fs_type \"%s\" for %s\n", v->fs_type, mount_point);
@@ -427,20 +456,6 @@ int ensure_path_unmounted(const char* path) {
     }
 
     return unmount_mounted_volume(mv);
-}
-
-static int exec_cmd(const char* path, char* const argv[]) {
-    int status;
-    pid_t child;
-    if ((child = vfork()) == 0) {
-        execv(path, argv);
-        _exit(-1);
-    }
-    waitpid(child, &status, 0);
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        printf("%s failed with status %d\n", path, WEXITSTATUS(status));
-    }
-    return WEXITSTATUS(status);
 }
 
 int format_volume(const char* volume) {
@@ -520,24 +535,20 @@ int format_volume(const char* volume) {
     }
 
     if (strcmp(v->fs_type, "f2fs") == 0) {
-        char bytes_reserved[20], num_sectors[20];
-		const char* f2fs_argv[6] = {"mkfs.f2fs", "-t1"};
 		if (length < 0) {
-			snprintf(bytes_reserved, sizeof(bytes_reserved), "%zd", -length);
-			f2fs_argv[2] = "-r";
-			f2fs_argv[3] = bytes_reserved;
-			f2fs_argv[4] = v->device;
-			f2fs_argv[5] = NULL;
-		} else {
-			/* num_sectors can be zero which mean whole device space */
-			snprintf(num_sectors, sizeof(num_sectors), "%zd", length / 512);
-			f2fs_argv[2] = v->device;
-			f2fs_argv[3] = num_sectors;
-			f2fs_argv[4] = NULL;
+			LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
+			return -1;
+		}
+		char *num_sectors;
+		if (asprintf(&num_sectors, "%zd", length / 512) <= 0) {
+			LOGE("format_volume: failed to create %s command for %s\n", v->fs_type, v->device);
+			return -1;
 		}
 		const char *f2fs_path = "/sbin/mkfs.f2fs";
+		const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", v->device, num_sectors, NULL};
 
 		result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
+		free(num_sectors);
         if (result != 0) {
             LOGE("format_volume: make f2fs failed on %s\n", v->device);
             return -1;
@@ -595,19 +606,19 @@ int setup_encrypted_data() {
 
 	property_get("ro.ctr.crypto.passwd", crypto_passwd, "error");
 	if (strcmp(crypto_passwd, "error") == 0) {
-			sprintf(cmd, "vdc cryptfs checkpw %s", DEFAULT_PASSWORD);
+			sprintf(cmd, "/sbin/vdc cryptfs checkpw %s", DEFAULT_PASSWORD);
 			sleep(1);
 			if (0 == __system(cmd)) {
-				sprintf(cmd, "vdc cryptfs checkpw %s", DEFAULT_HEX_PASSWORD);
+				sprintf(cmd, "/sbin/vdc cryptfs checkpw %s", DEFAULT_HEX_PASSWORD);
 				sleep(1);
 			}			
 	} else {
-		sprintf(cmd, "vdc cryptfs checkpw %s", crypto_passwd);
+		sprintf(cmd, "/sbin/vdc cryptfs checkpw %s", crypto_passwd);
 		sleep(1);
 	}
 
 	if (0 == __system(cmd)) {
-		sprintf(tmp, "mount /dev/block/dm-0 /data");
+		sprintf(tmp, "/sbin/mount /dev/block/dm-0 /data");
 		sleep(1);
 		if (is_data_media()) setup_data_media();
 	}

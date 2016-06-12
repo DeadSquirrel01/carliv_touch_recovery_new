@@ -61,7 +61,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.2
+RECOVERY_VERSION := $(RECOVERY_NAME) v5.3
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -203,6 +203,8 @@ LOCAL_STATIC_LIBRARIES += libmake_ext4fs libext4_utils_static libz liblz4-static
 LOCAL_STATIC_LIBRARIES += libminipigz libsdcard libfsck_msdos
 
 LOCAL_STATIC_LIBRARIES += libf2fs_fmt
+LOCAL_STATIC_LIBRARIES += libmount.ntfs-3g libntfsfix.recovery libmkntfs.recovery libfuse-lite.recovery libntfs-3g.recovery
+
 LOCAL_STATIC_LIBRARIES += libminzip libunz libmincrypt
 
 LOCAL_STATIC_LIBRARIES += libminizip libminadbd libedify libbusybox libmkyaffs2image libunyaffs liberase_image libdump_image libflash_image libfusesideload libmksh_ctr
@@ -228,27 +230,13 @@ LOCAL_C_INCLUDES += \
 LOCAL_C_INCLUDES += system/vold 
 endif
 
-ifeq ($(TARGET_USES_EXFAT),true)
 LOCAL_CFLAGS += -DHAVE_EXFAT
-LOCAL_STATIC_LIBRARIES += \
-	libexfat \
-	libexfat_fsck \
-	libexfat_mkfs \
-	libexfat_mount
-endif
+LOCAL_WHOLE_STATIC_LIBRARIES += libexfat libfuse libexfat_fsck libexfat_mkfs libexfat_mount
 
 LOCAL_C_INCLUDES += system/extras/ext4_utils
 LOCAL_C_INCLUDES += external/openssl/include
 
 RECOVERY_LINKS := bu make_ext4fs edify busybox flash_image dump_image mkyaffs2image unyaffs erase_image nandroid reboot volume setprop getprop start stop minizip setup_adbd fsck_msdos newfs_msdos sdcard pigz
-
-RECOVERY_LINKS += mkfs.f2fs fsck.f2fs
-
-ifeq ($(TARGET_USES_EXFAT),true)
-RECOVERY_LINKS += fsck.exfat mkfs.exfat
-endif
-
-RECOVERY_LINKS += e2fsck mke2fs tune2fs fsck.ext4 mkfs.ext4 fsck.ntfs mkfs.ntfs mount.ntfs
 
 ifeq ($(BOARD_INCLUDE_CRYPTO), true)
 LOCAL_CFLAGS += -DMINIVOLD
@@ -259,7 +247,7 @@ endif
 RECOVERY_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(RECOVERY_LINKS))
 
 BUSYBOX_LINKS := $(shell cat external/busybox/busybox-minimal.links)
-exclude := tune2fs mke2fs
+exclude := mke2fs
 RECOVERY_BUSYBOX_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(filter-out $(exclude),$(notdir $(BUSYBOX_LINKS))))
 
 ifeq ($(BOARD_INCLUDE_CRYPTO), true)
@@ -271,11 +259,15 @@ LOCAL_ADDITIONAL_DEPENDENCIES += \
     killrecovery.sh \
     nandroid-md5.sh \
     parted \
-    sdparted     
+    sdparted \
+    mount.exfat_static
 
-ifeq ($(TARGET_USES_EXFAT),true)
-LOCAL_ADDITIONAL_DEPENDENCIES += mount.exfat_static
-endif
+LOCAL_ADDITIONAL_DEPENDENCIES += \
+	mkfs.f2fs \
+	fsck.f2fs \
+	mkfs.ntfs \
+	mount.ntfs \
+	fsck.ntfs
 
 LOCAL_ADDITIONAL_DEPENDENCIES += recovery_mkshrc carliv
 
@@ -392,6 +384,7 @@ include $(commands_recovery_local_path)/updater/Android.mk
 include $(commands_recovery_local_path)/applypatch/Android.mk
 include $(commands_recovery_local_path)/utilities/Android.mk
 include $(commands_recovery_local_path)/loki/Android.mk
+include $(commands_recovery_local_path)/ntfs-3g/Android.mk
 commands_recovery_local_path :=
 
 endif
