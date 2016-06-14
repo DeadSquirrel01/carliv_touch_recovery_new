@@ -14,7 +14,7 @@ LOCAL_C_INCLUDES += \
     external/zlib \
     system/core/include/pixelflinger
 
-LOCAL_STATIC_LIBRARY := libpng
+LOCAL_STATIC_LIBRARIES += libpng
 LOCAL_WHOLE_STATIC_LIBRARIES := libpixelflinger_static
 LOCAL_MODULE := libminui
 

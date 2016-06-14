@@ -38,6 +38,10 @@ double pow(double x, double y) {
     return x * y;
 }
 
+double	floor(double x) {
+	return x;
+}
+
 #define SURFACE_DATA_ALIGNMENT 8
 
 static GGLSurface* malloc_surface(size_t data_size) {

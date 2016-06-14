@@ -17,6 +17,15 @@ ifeq ($(RECOVERY_PATH_SET),true)
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
+LOCAL_SRC_FILES := fuse_sideload.c
+LOCAL_CFLAGS := -O2 -g -DADB_HOST=0 -Wall -Wno-unused-parameter
+LOCAL_CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
+LOCAL_MODULE := libfusesideload
+LOCAL_C_INCLUDES += system/core/include
+LOCAL_STATIC_LIBRARIES := libcutils libc libmincrypt
+include $(BUILD_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
     recovery.c \
@@ -24,6 +33,7 @@ LOCAL_SRC_FILES := \
     install.c \
     roots.c \
     ui.c \
+    mtdutils/mounts.c \
     extendedcommands.c \
     nandroid.c \
     ../../system/core/toolbox/dynarray.c \
@@ -61,7 +71,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.3
+RECOVERY_VERSION := $(RECOVERY_NAME) v5.4
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -156,17 +166,61 @@ LOCAL_C_INCLUDES := \
     system/core/adb \
     external/e2fsprogs/lib \
     system/core/libsparse \
-	bionic \
+    system/core/libcutils \
+	bionic/libc/bionic \
 	external/openssl/include \
 	system/core/include \
 	external/stlport/stlport
 
-LOCAL_STATIC_LIBRARIES :=
+LOCAL_STATIC_LIBRARIES := \
+    libext4_utils_static \
+    libmake_ext4fs \
+    libminizip \
+    libsparse_static \
+    libfsck_msdos \
+    libminipigz \
+    libreboot_static \
+    libsdcard \
+    libminzip \
+    libz \
+    libunz \
+    libcrecovery \
+    libflashutils \
+    libmtdutils \
+    libmmcutils \
+    libbmlutils \
+    libmincrypt \
+    libminadbd \
+    libedify \
+    libbusybox \
+    libmkyaffs2image \
+    libunyaffs \
+    liberase_image \
+    libdump_image \
+    libflash_image \
+    libmksh_ctr \
+    libfusesideload \
+    libcrypto_static \
+    libminui \
+    libpixelflinger_static \
+    libpng \
+    libfs_mgr \
+    libcutils \
+    liblog \
+    libselinux \
+    libstdc++ \
+    libutils \
+    libm \
+    libc \
+    libext2_blkid \
+    libext2_uuid
 
-ifeq ($(TARGET_USERIMAGES_USE_EXT4), true)
-	LOCAL_CFLAGS += -DUSE_EXT4
-	LOCAL_C_INCLUDES += system/extras/ext4_utils
-	LOCAL_STATIC_LIBRARIES += libext4_utils_static libz liblz4-static
+LOCAL_CFLAGS += -DUSE_EXT4
+LOCAL_C_INCLUDES += system/extras/ext4_utils
+LOCAL_STATIC_LIBRARIES += libext4_utils_static libz liblz4-static
+
+ifeq ($(BOARD_USES_BML_OVER_MTD),true)
+LOCAL_STATIC_LIBRARIES += libbml_over_mtd
 endif
 
 ifeq ($(ENABLE_LOKI_RECOVERY),true)
@@ -175,10 +229,20 @@ ifeq ($(ENABLE_LOKI_RECOVERY),true)
   LOCAL_SRC_FILES += loki/loki_recovery.c
 endif
 
-# This binary is in the recovery ramdisk, which is otherwise a copy of root.
-# It gets copied there in config/Makefile.  LOCAL_MODULE_TAGS suppresses
-# a (redundant) copy of the binary in /system/bin for user builds.
-# TODO: Build the ramdisk image in a more principled way.
+LOCAL_STATIC_LIBRARIES += libf2fs_fmt
+LOCAL_STATIC_LIBRARIES += libmount.ntfs-3g libntfsfix.recovery libmkntfs.recovery libfuse-lite.recovery libntfs-3g.recovery
+
+ifeq ($(BOARD_INCLUDE_CRYPTO), true)
+LOCAL_STATIC_LIBRARIES += libvold
+LOCAL_C_INCLUDES += \
+	system/extras/ext4_utils \
+	system/core/fs_mgr/include \
+	external/fsck_msdos \
+LOCAL_C_INCLUDES += system/vold 
+endif
+
+LOCAL_CFLAGS += -DHAVE_EXFAT
+LOCAL_WHOLE_STATIC_LIBRARIES += libexfat libfuse libexfat_fsck libexfat_mkfs libexfat_mount
 
 LOCAL_MODULE_TAGS := eng
 
@@ -195,43 +259,6 @@ else
 endif
 
 LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
-
-LOCAL_C_INCLUDES += system/extras/ext4_utils
-LOCAL_C_INCLUDES += external/openssl/include
-
-LOCAL_STATIC_LIBRARIES += libmake_ext4fs libext4_utils_static libz liblz4-static libreboot_static libsparse_static
-LOCAL_STATIC_LIBRARIES += libminipigz libsdcard libfsck_msdos
-
-LOCAL_STATIC_LIBRARIES += libf2fs_fmt
-LOCAL_STATIC_LIBRARIES += libmount.ntfs-3g libntfsfix.recovery libmkntfs.recovery libfuse-lite.recovery libntfs-3g.recovery
-
-LOCAL_STATIC_LIBRARIES += libminzip libunz libmincrypt
-
-LOCAL_STATIC_LIBRARIES += libminizip libminadbd libedify libbusybox libmkyaffs2image libunyaffs liberase_image libdump_image libflash_image libfusesideload libmksh_ctr
-LOCAL_LDFLAGS += -Wl,--no-fatal-warnings
-
-LOCAL_STATIC_LIBRARIES += libcrypto_static libcrecovery libflashutils libmtdutils libmmcutils libbmlutils
-
-ifeq ($(BOARD_USES_BML_OVER_MTD),true)
-LOCAL_STATIC_LIBRARIES += libbml_over_mtd
-endif
-
-LOCAL_STATIC_LIBRARIES += libminui libpixelflinger_static libpng libcutils liblog libutils
-LOCAL_STATIC_LIBRARIES += libstdc++ libc
-
-LOCAL_STATIC_LIBRARIES += libselinux
-
-ifeq ($(BOARD_INCLUDE_CRYPTO), true)
-LOCAL_STATIC_LIBRARIES += libvold
-LOCAL_C_INCLUDES += \
-	system/extras/ext4_utils \
-	system/core/fs_mgr/include \
-	external/fsck_msdos \
-LOCAL_C_INCLUDES += system/vold 
-endif
-
-LOCAL_CFLAGS += -DHAVE_EXFAT
-LOCAL_WHOLE_STATIC_LIBRARIES += libexfat libfuse libexfat_fsck libexfat_mkfs libexfat_mount
 
 LOCAL_C_INCLUDES += system/extras/ext4_utils
 LOCAL_C_INCLUDES += external/openssl/include
@@ -293,15 +320,6 @@ $(RECOVERY_BUSYBOX_SYMLINKS):
 	@mkdir -p $(dir $@)
 	@rm -rf $@
 	$(hide) ln -sf $(BUSYBOX_BINARY) $@ 
-
-include $(CLEAR_VARS)
-LOCAL_SRC_FILES := fuse_sideload.c
-LOCAL_CFLAGS := -O2 -g -DADB_HOST=0 -Wall -Wno-unused-parameter
-LOCAL_CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
-LOCAL_MODULE := libfusesideload
-LOCAL_C_INCLUDES += system/core/include
-LOCAL_STATIC_LIBRARIES := libcutils libc libmincrypt
-include $(BUILD_STATIC_LIBRARY)
 
 # Reboot static library
 include $(CLEAR_VARS)
