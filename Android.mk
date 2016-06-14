@@ -30,6 +30,7 @@ LOCAL_SRC_FILES := \
     install.c \
     roots.c \
     ui.c \
+    mtdutils/mounts.c \
     extendedcommands.c \
     nandroid.c \
     libcrecovery/toolbox/dynarray.c \

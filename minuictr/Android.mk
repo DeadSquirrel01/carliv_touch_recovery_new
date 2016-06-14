@@ -1,5 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
+
 LOCAL_CFLAGS += -Wno-unused-parameter
 LOCAL_SRC_FILES := graphics_overlay.c events.c resources.c
 ifneq ($(BOARD_CUSTOM_GRAPHICS),)
@@ -54,10 +55,3 @@ ifneq ($(TARGET_RECOVERY_LCD_BACKLIGHT_PATH),)
 endif
 
 include $(BUILD_STATIC_LIBRARY)
-
-# Used by OEMs for factory test images.
-include $(CLEAR_VARS)
-LOCAL_MODULE := libminuictr
-LOCAL_WHOLE_STATIC_LIBRARIES += libminuictr
-LOCAL_SHARED_LIBRARIES := libpng
-include $(BUILD_SHARED_LIBRARY)
