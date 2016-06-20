@@ -37,7 +37,6 @@ void show_nandroid_restore_menu(const char* path);
 void show_advanced_menu();
 void show_nandroid_menu();
 void show_partition_menu();
-int install_zip(const char* packagefilepath);
 int __system(const char *command);
 
 void wipe_preflash(int confirm);

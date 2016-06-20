@@ -16,7 +16,7 @@ service set_permissive /sbin/permissive.sh
     seclabel u:r:recovery:s0
 
 on init
-    export PATH /sbin:/system/bin
+    export PATH /sbin:/system/bin:/system/xbin:/su/bin
     export ANDROID_ROOT /system
     export ANDROID_DATA /data
     export EXTERNAL_STORAGE /sdcard

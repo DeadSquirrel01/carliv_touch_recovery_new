@@ -401,6 +401,7 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
 		if ((result = __system(mount_cmd)) != 0) {
             if (strcmp(v->fs_type, "auto") == 0) {
                 struct stat s;
+                ui_set_log_stdout(0);
                 if (stat("/sbin/exfat-fuse", &s) == 0) {
                     sprintf(mount_cmd, "/sbin/exfat-fuse -o big_writes,default_permissions,max_read=131072,max_write=131072 %s %s", v->device, mount_point);
                     result = __system(mount_cmd);
@@ -410,6 +411,7 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
 					const char* const ntfs_argv[] = {"mount.ntfs", "-o umask=0", v->device, mount_point, NULL};
 					result = exec_cmd(ntfs_path, (char* const*)ntfs_argv);
                 }
+                ui_set_log_stdout(1);               
             }
         }
         return result;
@@ -536,7 +538,7 @@ int format_volume(const char* volume) {
         }
         return 0;
     }
-
+#ifdef USE_F2FS
     if (strcmp(v->fs_type, "f2fs") == 0) {
 		if (length < 0) {
 			LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
@@ -558,7 +560,7 @@ int format_volume(const char* volume) {
         }
         return 0;
     }
-
+#endif
 #if 0
     LOGE("format_volume: fs_type \"%s\" unsupported\n", v->fs_type);
     return -1;

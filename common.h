@@ -75,11 +75,6 @@ enum {
 
 void ui_set_background(int icon);
 
-// Get a malloc'd copy of the screen image showing (only) the specified icon.
-// Also returns the width, height, and bits per pixel of the returned image.
-// TODO: Use some sort of "struct Bitmap" here instead of all these variables?
-char *ui_copy_image(int icon, int *width, int *height, int *bpp);
-
 // Show a progress bar and define the scope of the next operation:
 //   portion - fraction of the progress bar the next operation will use
 //   seconds - expected time interval (progress bar moves at this minimum rate)

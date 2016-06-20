@@ -1,6 +1,9 @@
-**Carliv Touch Recovery**
+__<center><big>**Carliv Touch Recovery**</big></center>__
 
-- version 6.2 is for Marshmallow (cm 13 or aicp-mm6.0).
+__Home page__
+http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290
+
+- version 6.3 is for Marshmallow (cm 13 or aicp-mm6.0).
 The version starting number is related to android version.
 
 This is a CWM based recovery and I did put up some work to update it to marshmallow (cm-13) after official cwm development stopped at kitkat. It works with *MARSHMALLOW* kernels and it builds with cm 13 or aicp-mm6.0. 
@@ -10,7 +13,7 @@ Because the vold in cm 13 doesn't support cwm anymore I had to use the old *fsta
 Features:
 - EXT4 and F2FS by default, both built in.
 - full touch menu ported by me from PhilZ touch Recovery. The old Napstar-xda touch module was good but it's quite old and to update that was too much work. Actually There is a version 4 with that touch module, all working, but the touch doesn't work with some input drivers and I had to give up on it for the new and improved version from PhilZ.
-- all cwm functionalities are up and working (adb, sideload, backup, restore, install, mass storage...). There is no mtp and if your phone doesn't have an external sdcard you can't connect it to PC while is in recovery mode. But there is usb-otg support, of course if your phone was shipped with that.
+- all cwm functionalities are up and working (adb, sideload, backup, restore, install, mass storage...). There is no mtp and if your phone doesn't have an external sdcard you can't connect it to PC while is in recovery mode. But there is usb-otg support, of course if your phone has a kernel capable to do that.
 - added new menu for backup and restore advanced, to use it for backing or restoring only a specific partition and I also ported from PhilZ the multizip flashing function.
 - in *Carliv menu* there is now a new section for flashing boot and recovery images. It is a feature that I needed during many recovery builds testing. I wanted an easier way to flash other image without booting to android and using an app like RashR. You can browse your storage locations for any image and after choose you will have to select on wich partition should  that be flashed. I added multiple confirmations check to avoid flashing on wrong partition. This feature works only with boot and recovery images. I won't add other partitions to this because for other things there are multiple backup restore functions.
 - for MTK phones (if the flag is used in Boardconfig) there is a new menu to backup and restore some important partitions like uboot, nvram an secro because they are involved in restoring a lost IMEI, and also the logo partition which may often get broken by bad ported ROMs.
@@ -47,14 +50,22 @@ For BoardConfig:
 - for the graphical interface
 - `TARGET_RECOVERY_PIXEL_FORMAT`
 
-- for mass storage if your phone has an external sdcard, to connect it to PC (this one can be specified in fstab too)
-- `TARGET_USE_CUSTOM_LUN_FILE_PATH`
+- for mass storage if your phone has an external sdcard, to connect it to PC (this one can be specified in fstab too) - and it has to be without any quotes or slashes
+- `TARGET_USE_CUSTOM_LUN_FILE_PATH := /sys/devices/platform/mt_usb/musb-hdrc.0.auto/gadget/lun%d/file`
+
+- for LCD backlight lights - and it has to be without any quotes or slashes
+- `TARGET_RECOVERY_LCD_BACKLIGHT_PATH := /sys/class/leds/lcd-backlight/brightness`
+
+- for vibrator feature - and it has to be without any quotes or slashes
+- `VIBRATOR_TIMEOUT_FILE := /sys/devices/virtual/timed_output/vibrator/enable`
 
 - with link to a valid recovery.fstab version 2 (it may work without it but it is better to be here)
 - `TARGET_RECOVERY_FSTAB`
 
 - for a better readability adapted to your screen (check the minui folder for more fonts)
 - `BOARD_USE_CUSTOM_RECOVERY_FONT`
+
+NOTE: above are just some examples and you have to use your device specific values or links.
 
 Carliv Touch Recovery specific flags:
 - if you have the recovery on recovery-carliv folder under bootable directory in cm-13 source use this next flag. 

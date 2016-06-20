@@ -26,16 +26,22 @@ LOCAL_FORCE_STATIC_EXECUTABLE := true
 LOCAL_WHOLE_STATIC_LIBRARIES += \
 	libfuse_static
 
+ifeq ($(TARGET_USES_NTFS),true)
+LOCAL_CFLAGS += -DHAVE_NTFS
 LOCAL_WHOLE_STATIC_LIBRARIES += \
 	libntfs-3g_static \
 	libntfs3g_fsck_static \
 	libntfs3g_mkfs_main \
 	libntfs3g_mount_static
+endif
 
+ifeq ($(TARGET_USERIMAGES_USE_F2FS),true)
+LOCAL_CFLAGS += -DUSE_F2FS
 LOCAL_WHOLE_STATIC_LIBRARIES += \
 	libf2fs_static \
 	libf2fs_fsck_static \
 	libf2fs_mkfs_static
+endif
 
 LOCAL_STATIC_LIBRARIES := \
 	libext2_blkid \
@@ -48,7 +54,13 @@ LOCAL_STATIC_LIBRARIES := \
 	libc \
 	libm
 
-FSTOOLS_LINKS := fsck.ntfs mkfs.ntfs mount.ntfs mkfs.f2fs fsck.f2fs
+ifeq ($(TARGET_USERIMAGES_USE_F2FS),true)
+FSTOOLS_LINKS := mkfs.f2fs fsck.f2fs
+endif
+
+ifeq ($(TARGET_USES_NTFS),true)
+FSTOOLS_LINKS += fsck.ntfs mkfs.ntfs mount.ntfs
+endif
 
 RECOVERY_FSTOOLS_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(FSTOOLS_LINKS))
 

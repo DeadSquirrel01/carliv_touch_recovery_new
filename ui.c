@@ -64,7 +64,6 @@ static gr_surface *gProgressBarIndeterminate;
 static gr_surface gProgressBarEmpty;
 static gr_surface gProgressBarFill;
 static gr_surface gVirtualKeys;
-static int ui_has_initialized = 0;
 static int ui_log_stdout = 1;
 
 static int boardEnableKeyRepeat = 0;
@@ -221,20 +220,16 @@ static void draw_background_locked(int icon) {
 }
 
 static void ui_increment_frame() {
-    if (!ui_has_initialized) return;
     gInstallingFrame =
         (gInstallingFrame + 1) % ui_parameters.installing_frames;
 }
 
-static long delta_milliseconds(struct timeval from, struct timeval to) {
-    long delta_sec = (to.tv_sec - from.tv_sec)*1000;
-    long delta_usec = (to.tv_usec - from.tv_usec)/1000;
-    return (delta_sec + delta_usec);
-}
+static long long t_last_progress_update = 0;
 
 // Draw the progress bar (if any) on the screen; does not flip pages
-// Should only be called with gUpdateMutex locked and if ui_has_initialized is true
-static void draw_progress_locked() {
+// Should only be called with gUpdateMutex locked
+static void draw_progress_locked()
+{
     if (gCurrentIcon == BACKGROUND_ICON_INSTALLING) {
         // update the installation animation, if active
         if (ui_parameters.installing_frames > 0)
@@ -273,7 +268,7 @@ static void draw_progress_locked() {
         }
     }
 
-    gettimeofday(&lastprogupd, NULL);
+    t_last_progress_update = timenow_msec();
 }
 
 /*******************************/
@@ -286,6 +281,7 @@ static int first_touched_menu = -1;
 static int last_touched_menu = -1;
 static int now_scrolling = 0;
 static long scroll_speed = 0;
+int ignore_key_action = 0;
 static int allow_long_press_move = 0;
 static int virtual_keys_h = 0;
 
@@ -456,9 +452,7 @@ void fast_ui_init(void) {
 }
 
 void draw_menu() {
-    if (show_text) {
-        // don't "disable" the background any more with this...
-        gr_color(0, 0, 0, 80);
+        gr_color(0, 0, 0, 110);
         gr_fill(0, 0, gr_fb_width(), gr_fb_height());
 
         int i = 0;
@@ -535,8 +529,6 @@ void draw_menu() {
           gr_color(NORMAL_TEXT_COLOR);
           draw_text_line(start_row + r, text[(cur_row + r) % MAX_ROWS], CHAR_HEIGHT, LEFT_ALIGN);
         }
-    }
-
     draw_virtualkeys_locked();
 }
 
@@ -553,17 +545,17 @@ static int ui_menu_header_offset() {
 // Redraw everything on the screen.  Does not flip pages.
 // Should only be called with gUpdateMutex locked.
 static void draw_screen_locked(void) {
-    if (!ui_has_initialized) return;
-    draw_background_locked(gCurrentIcon);
-    draw_progress_locked();
-
-    draw_menu();
+	draw_background_locked(gCurrentIcon);
+    if (!show_text) {	    
+	    draw_progress_locked();
+    } else {
+	    draw_menu();
+	}
 }
 
 // Redraw everything on the screen and flip the screen (make it visible).
 // Should only be called with gUpdateMutex locked.
 static void update_screen_locked(void) {
-    if (!ui_has_initialized) return;
     draw_screen_locked();
     gr_flip();
 }
@@ -572,16 +564,10 @@ static void update_screen_locked(void) {
 // Should only be called with gUpdateMutex locked.
 static void update_progress_locked(void)
 {
-    if (!ui_has_initialized) return;
     // set minimum delay between progress updates if we have a text overlay
     // exception: gProgressScopeDuration != 0: to keep zip installer refresh behavior
-    struct timeval curtime;
-    gettimeofday(&curtime, NULL);
-    long delta_ms = delta_milliseconds(lastprogupd, curtime);
-    if (show_text && gProgressScopeDuration == 0 && lastprogupd.tv_sec > 0
-            && delta_ms < UI_MIN_PROG_DELTA_MS) {
+    if (show_text && t_last_progress_update > 0 && gProgressScopeDuration == 0 && timenow_msec() - t_last_progress_update < UI_UPDATE_PROGRESS_INTERVAL)
         return;
-    }
 
     if (show_text || !gPagesIdentical) {
         draw_screen_locked();    // Must redraw the whole screen
@@ -1171,6 +1157,11 @@ static int touch_handle_input(int fd, struct input_event ev) {
     get_touch_accuracy();
 
     if (ev.type == EV_KEY) {
+        if (ignore_key_action) {
+            ev.code = KEY_ESC;
+            if (ev.value == 0)
+                ignore_key_action = 0;
+        }
         key_handle_input(ev);
         return 1;
     }
@@ -1195,7 +1186,12 @@ static int touch_handle_input(int fd, struct input_event ev) {
         t_old_last_touch = t_last_touch;
         t_last_touch = timenow_msec();
 
-        if (vbutton_pressed != -1) {
+        if (ignore_key_action) {
+            ignore_key_action = 0;
+            ev.type = EV_KEY;
+            ev.code = KEY_ESC;
+            ev.value = 1;
+        } else if (vbutton_pressed != -1) {
             toggle_key_pressed(vbutton_pressed, 0);
             vbutton_pressed = -1;
             now_scrolling = 0;
@@ -1231,7 +1227,7 @@ static int touch_handle_input(int fd, struct input_event ev) {
             scroll_speed = 0; 
             t_first_touch = timenow_msec();
 
-            if (now_scrolling != 0) {
+            if (!ignore_key_action && now_scrolling != 0) {
                 pthread_mutex_lock(&key_queue_mutex);
                 if (key_queue_len == 0 && (t_first_touch - t_last_touch) > 650)
                     now_scrolling = 0;
@@ -1260,14 +1256,14 @@ static int touch_handle_input(int fd, struct input_event ev) {
 
             if (touch_y > (fbh - virtual_keys_h) && touch_y < fbh) {
 
-                if (vbutton_pressed == -1 && (ret = input_buttons()) != -1) {
+                if (!ignore_key_action && vbutton_pressed == -1 && (ret = input_buttons()) != -1) {
                     vbutton_pressed = ret;
                     now_scrolling = 0;
                     ev.type = EV_KEY;
                     ev.code = vbutton_pressed;
                     ev.value = 1;
                 }
-            } else if (device_has_vk && touch_y > fbh && vk_pressed == -1 && (ret = input_vk()) != -1) {
+            } else if (!ignore_key_action && device_has_vk && touch_y > fbh && vk_pressed == -1 && (ret = input_vk()) != -1) {
                 vk_pressed = ret;
                 now_scrolling = 0;
                 ev.type = EV_KEY;
@@ -1302,7 +1298,7 @@ static int touch_handle_input(int fd, struct input_event ev) {
                 allow_long_press_move = 0;
 
             int val = touch_y - last_scroll_y;
-            if (abs(val) > SCROLL_SENSITIVITY && ui_valid_menu_touch(touch_y) >= 0) {
+            if (!ignore_key_action && abs(val) > SCROLL_SENSITIVITY && ui_valid_menu_touch(touch_y) >= 0) {
                 long long t_now = timenow_msec();
                 scroll_speed = (long)(1000 * ((double)(abs(val)) / (double)(t_now - t_last_scroll_y)));
                 last_scroll_y = touch_y;
@@ -1325,16 +1321,23 @@ static int touch_handle_input(int fd, struct input_event ev) {
                 if (vbutton_pressed != -1) {
                     toggle_key_pressed(vbutton_pressed, 0);
                     vbutton_pressed = -1;
+                } else if (!ignore_key_action && allow_long_press_move &&
+                            (timenow_msec() - t_first_touch) > 2000 && ui_valid_menu_touch(touch_y) == -1) {
+                    ev.type = EV_KEY;
+                    ev.code = KEY_LEFTBRACE;
+                    ev.value = 1;
+                    if (vibration_enabled) vibrate(VIBRATOR_TIME_MS);
+                    allow_long_press_move = 0;
                 }
             } else if (touch_x != TOUCH_RESET_POS && touch_y > (fbh - virtual_keys_h) && touch_y < fbh) {
-                if (vbutton_pressed == -1 && (ret = input_buttons()) != -1) {
+                if (!ignore_key_action && vbutton_pressed == -1 && (ret = input_buttons()) != -1) {
                     vbutton_pressed = ret;
                     now_scrolling = 0;
                     ev.type = EV_KEY;
                     ev.code = vbutton_pressed;
                     ev.value = 1;
                 }
-            } else if (device_has_vk && vk_pressed == -1 &&
+            } else if (!ignore_key_action && device_has_vk && vk_pressed == -1 &&
                        touch_x != TOUCH_RESET_POS && (ret = input_vk()) != -1) {
                 now_scrolling = 0;
                 vk_pressed = ret;
@@ -1382,7 +1385,7 @@ static int touch_handle_input(int fd, struct input_event ev) {
             struct timeval now;
             gettimeofday(&now, NULL);
 
-            key_press_time[ev.code] = (now.tv_sec * 1000) + (now.tv_usec / 1000);
+            key_press_time[ev.code] = (now.tv_sec * 500) + (now.tv_usec / 1000);
             key_last_repeat[ev.code] = 0;
         }
 
@@ -1495,7 +1498,6 @@ static void *input_thread(void *cookie) {
 }
 
 void ui_init(void) {
-    ui_has_initialized = 1;
     gr_init();
     ev_init(input_callback, NULL);
     touch_init();
@@ -1564,23 +1566,6 @@ void ui_init(void) {
     pthread_create(&t, NULL, input_thread, NULL);
 }
 
-char *ui_copy_image(int icon, int *width, int *height, int *bpp) {
-    pthread_mutex_lock(&gUpdateMutex);
-    draw_background_locked(icon);
-    *width = gr_fb_width();
-    *height = gr_fb_height();
-    *bpp = sizeof(gr_pixel) * 8;
-    int size = *width * *height * sizeof(gr_pixel);
-    char *ret = malloc(size);
-    if (ret == NULL) {
-        LOGE("Can't allocate %d bytes for image\n", size);
-    } else {
-        memcpy(ret, gr_fb_data(), size);
-    }
-    pthread_mutex_unlock(&gUpdateMutex);
-    return ret;
-}
-
 void ui_set_background(int icon) {
     pthread_mutex_lock(&gUpdateMutex);
     gCurrentIcon = icon;
@@ -1589,9 +1574,6 @@ void ui_set_background(int icon) {
 }
 
 void ui_show_indeterminate_progress() {
-    if (!ui_has_initialized)
-        return;
-
     pthread_mutex_lock(&gUpdateMutex);
     if (gProgressBarType != PROGRESSBAR_TYPE_INDETERMINATE) {
         gProgressBarType = PROGRESSBAR_TYPE_INDETERMINATE;
@@ -1601,9 +1583,6 @@ void ui_show_indeterminate_progress() {
 }
 
 void ui_show_progress(float portion, int seconds) {
-    if (!ui_has_initialized)
-        return;
-
     pthread_mutex_lock(&gUpdateMutex);
     gProgressBarType = PROGRESSBAR_TYPE_NORMAL;
     gProgressScopeStart += gProgressScopeSize;
@@ -1616,9 +1595,6 @@ void ui_show_progress(float portion, int seconds) {
 }
 
 void ui_set_progress(float fraction) {
-    if (!ui_has_initialized)
-        return;
-
     pthread_mutex_lock(&gUpdateMutex);
     if (fraction < 0.0) fraction = 0.0;
     if (fraction > 1.0) fraction = 1.0;
@@ -1635,9 +1611,6 @@ void ui_set_progress(float fraction) {
 }
 
 void ui_reset_progress() {
-    if (!ui_has_initialized)
-        return;
-
     pthread_mutex_lock(&gUpdateMutex);
     gProgressBarType = PROGRESSBAR_TYPE_NONE;
     gProgressScopeStart = 0;
@@ -1685,9 +1658,6 @@ void ui_print(const char *fmt, ...) {
 
     if (ui_log_stdout)
         fputs(buf, stdout);
-
-    if (!ui_has_initialized)
-        return;
 
     // This can get called before ui_init(), so be careful.
     pthread_mutex_lock(&gUpdateMutex);
@@ -2050,8 +2020,4 @@ void ui_rainbow_mode() {
     gr_color(colors[cur_rainbow_color], colors[cur_rainbow_color+1], colors[cur_rainbow_color+2], 255);
     cur_rainbow_color += 3;
     if (cur_rainbow_color >= (sizeof(colors) / sizeof(colors[0]))) cur_rainbow_color = 0;
-}
-
-int is_ui_initialized() {
-    return ui_has_initialized;
 }

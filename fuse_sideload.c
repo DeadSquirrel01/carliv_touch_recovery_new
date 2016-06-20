@@ -59,6 +59,7 @@
 #include <sys/time.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include "mincrypt/sha256.h"
 #include "fuse_sideload.h"
@@ -166,7 +167,7 @@ static void block_cache_enter(struct fuse_data* fd, uint32_t block)
     fd->block_cache_size++;
 }
 
-static void fuse_reply(struct fuse_data* fd, __u64 unique, const void *data, size_t len)
+static void fuse_reply(struct fuse_data* fd, __u64 unique, void *data, size_t len)
 {
     struct fuse_out_header hdr;
     struct iovec vec[2];
@@ -501,7 +502,7 @@ int run_fuse_sideload(struct provider_vtab* vtab, void* cookie,
 
     char opts[256];
     snprintf(opts, sizeof(opts),
-             ("fd=%d,user_id=%d,group_id=%d,max_read=%zu,"
+             ("fd=%d,user_id=%d,group_id=%d,max_read=%"PRIu32","
               "allow_other,rootmode=040000"),
              fd.ffd, fd.uid, fd.gid, block_size);
 

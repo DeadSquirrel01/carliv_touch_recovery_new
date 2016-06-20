@@ -19,13 +19,17 @@
 
 #include <stdio.h>
 #include <string.h>
-
+#if defined(HAVE_NTFS) || defined(USE_F2FS)
+#ifdef HAVE_NTFS
 int fsck_ntfs3g_main(int argc, char **argv);
 int mkfs_ntfs3g_main(int argc, char **argv);
 int mount_ntfs3g_main(int argc, char **argv);
+#endif
+#ifdef USE_F2FS
 int mkfs_f2fs_main(int argc, char **argv);
 int fsck_f2fs_main(int argc, char **argv);
 int fibmap_main(int argc, char **argv);
+#endif
 
 struct fstools_cmd {
     const char *name;
@@ -33,11 +37,15 @@ struct fstools_cmd {
 };
 
 static const struct fstools_cmd fstools_cmds[] = {
+#ifdef HAVE_NTFS
     { "fsck.ntfs",      fsck_ntfs3g_main },
     { "mkfs.ntfs",      mkfs_ntfs3g_main },
     { "mount.ntfs",     mount_ntfs3g_main },
+#endif
+#ifdef USE_F2FS
     { "mkfs.f2fs",      mkfs_f2fs_main },
     { "fsck.f2fs",      fsck_f2fs_main },
+#endif
     { NULL, NULL },
 };
 
@@ -51,4 +59,5 @@ struct fstools_cmd get_command(char* command) {
 
     return fstools_cmds[i];
 }
+#endif
 #endif
