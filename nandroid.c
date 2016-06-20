@@ -43,7 +43,7 @@
 #include "bootloader.h"
 #include "common.h"
 #include "install.h"
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "minzip/DirUtil.h"
 #include "roots.h"
 #include "recovery_ui.h"

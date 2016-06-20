@@ -1,6 +1,9 @@
-**Carliv Touch Recovery**
+__<center><big>**Carliv Touch Recovery**</big></center>__
 
-- version 5.4 is for Lollipop (cm 12.1 or aicp lp-5.1).
+__Home page__
+http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290
+
+- version 5.5 is for Lollipop (cm 12.1 or aicp lp-5.1).
 The version starting number is related to android version.
 
 This is a CWM based recovery and I did put up some work to update it to lollipop (cm 12.1) after official cwm development stopped at kitkat. It works with *LOLLIPOP* kernels and it builds with cm 12.1 or aicp lp-5.1. 
@@ -47,14 +50,22 @@ For BoardConfig:
 - for the graphical interface
 - `TARGET_RECOVERY_PIXEL_FORMAT`
 
-- for mass storage if your phone has an external sdcard, to connect it to PC (this one can be specified in fstab too)
-- `TARGET_USE_CUSTOM_LUN_FILE_PATH`
+- for mass storage if your phone has an external sdcard, to connect it to PC (this one can be specified in fstab too) - and it has to be without any quotes or slashes
+- `TARGET_USE_CUSTOM_LUN_FILE_PATH := /sys/devices/platform/mt_usb/musb-hdrc.0.auto/gadget/lun%d/file`
+
+- for LCD backlight lights - and it has to be without any quotes or slashes
+- `TARGET_RECOVERY_LCD_BACKLIGHT_PATH := /sys/class/leds/lcd-backlight/brightness`
+
+- for vibrator feature - and it has to be without any quotes or slashes
+- `VIBRATOR_TIMEOUT_FILE := /sys/devices/virtual/timed_output/vibrator/enable`
 
 - with link to a valid recovery.fstab version 2 (it may work without it but it is better to be here)
 - `TARGET_RECOVERY_FSTAB`
 
 - for a better readability adapted to your screen (check the minui folder for more fonts)
 - `BOARD_USE_CUSTOM_RECOVERY_FONT`
+
+NOTE: above are just some examples and you have to use your device specific values or links.
 
 Carliv Touch Recovery specific flags:
 - if you have the recovery on recovery-carliv folder under bootable directory in cm-12.1 source use this next flag. 

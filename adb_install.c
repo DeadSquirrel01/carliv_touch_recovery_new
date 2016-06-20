@@ -26,7 +26,7 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "cutils/properties.h"
 #include "install.h"
 #include "common.h"

@@ -22,10 +22,10 @@
 // Delay in seconds to refresh clock and USB plugged volumes
 #define REFRESH_TIME_USB_INTERVAL 5
 
-#define UI_WAIT_KEY_TIMEOUT_SEC    3600
-#define UI_KEY_REPEAT_INTERVAL     80
-#define UI_KEY_WAIT_REPEAT         400
-#define UI_MIN_PROG_DELTA_MS       200
+#define UI_WAIT_KEY_TIMEOUT_SEC    	3600
+#define UI_KEY_REPEAT_INTERVAL     	80
+#define UI_KEY_WAIT_REPEAT         	400
+#define UI_UPDATE_PROGRESS_INTERVAL 300
 
 #define VIBRATOR_TIME_MS    40
 

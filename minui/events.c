@@ -28,8 +28,6 @@
 #define MAX_DEVICES 16
 #define MAX_MISC_FDS 16
 
-#define VIBRATOR_TIMEOUT_FILE	"/sys/class/timed_output/vibrator/enable"
-
 #define BITS_PER_LONG (sizeof(unsigned long) * 8)
 #define BITS_TO_LONGS(x) (((x) + BITS_PER_LONG - 1) / BITS_PER_LONG)
 
@@ -51,28 +49,6 @@ static struct fd_info ev_fdinfo[MAX_DEVICES + MAX_MISC_FDS];
 static unsigned ev_count = 0;
 static unsigned ev_dev_count = 0;
 static unsigned ev_misc_count = 0;
-
-int vibrate(int timeout_ms)
-{
-    char str[20];
-    int fd;
-    int ret;
-
-    if (timeout_ms > 10000) timeout_ms = 1000;
-
-    fd = open(VIBRATOR_TIMEOUT_FILE, O_WRONLY);
-    if (fd < 0)
-        return -1;
-
-    ret = snprintf(str, sizeof(str), "%d", timeout_ms);
-    ret = write(fd, str, ret);
-    close(fd);
-
-    if (ret < 0)
-       return -1;
-
-    return 0;
-}
 
 int ev_init(ev_callback input_cb, void *data)
 {
@@ -109,11 +85,7 @@ int ev_init(ev_callback input_cb, void *data)
                 continue;
             }
 
-#ifdef EPOLLWAKEUP
             ev.events = EPOLLIN | EPOLLWAKEUP;
-#else
-            ev.events = EPOLLIN;
-#endif
             ev.data.ptr = (void *)&ev_fdinfo[ev_count];
             if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
                 close(fd);
@@ -147,11 +119,7 @@ int ev_add_fd(int fd, ev_callback cb, void *data)
     if (ev_misc_count == MAX_MISC_FDS || cb == NULL)
         return -1;
 
-#ifdef EPOLLWAKEUP
     ev.events = EPOLLIN | EPOLLWAKEUP;
-#else
-    ev.events = EPOLLIN;
-#endif
     ev.data.ptr = (void *)&ev_fdinfo[ev_count];
     ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev);
     if (!ret) {
@@ -168,6 +136,22 @@ int ev_add_fd(int fd, ev_callback cb, void *data)
 int ev_get_epollfd(void)
 {
     return epollfd;
+}
+
+int ev_del_fd(int fd)
+{
+    unsigned n;
+    for (n = 0; n < ev_count; ++n) {
+        if (ev_fdinfo[n].fd == fd) {
+            if (n != ev_count-1) {
+                ev_fdinfo[n] = ev_fdinfo[ev_count-1];
+            }
+            ev_count--;
+            ev_misc_count--;
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void ev_exit(void)

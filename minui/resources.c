@@ -15,7 +15,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include <fcntl.h>
@@ -28,51 +27,46 @@
 #include <linux/fb.h>
 #include <linux/kd.h>
 
-#include <pixelflinger/pixelflinger.h>
-
 #include <png.h>
 
 #include "minui.h"
 
-double pow(double x, double y) {
-    return x * y;
-}
-
-double	floor(double x) {
-	return x;
-}
+#ifdef SHARED_MINUI
+char *locale = NULL;
+#else
+extern char* locale;
+#endif
 
 #define SURFACE_DATA_ALIGNMENT 8
 
-static GGLSurface* malloc_surface(size_t data_size) {
-    unsigned char* temp = malloc(sizeof(GGLSurface) + data_size + SURFACE_DATA_ALIGNMENT);
+static gr_surface malloc_surface(size_t data_size) {
+    unsigned char* temp = malloc(sizeof(GRSurface) + data_size + SURFACE_DATA_ALIGNMENT);
     if (temp == NULL) return NULL;
-    GGLSurface* surface = (GGLSurface*) temp;
-    surface->data = temp + sizeof(GGLSurface) +
-        (SURFACE_DATA_ALIGNMENT - (sizeof(GGLSurface) % SURFACE_DATA_ALIGNMENT));
+    gr_surface surface = (gr_surface) temp;
+    surface->data = temp + sizeof(GRSurface) +
+        (SURFACE_DATA_ALIGNMENT - (sizeof(GRSurface) % SURFACE_DATA_ALIGNMENT));
     return surface;
 }
 
 static int open_png(const char* name, png_structp* png_ptr, png_infop* info_ptr,
                     png_uint_32* width, png_uint_32* height, png_byte* channels) {
-    char resPath[256];
-    unsigned char header[8];
+    char resPath[256] = {0};
+    unsigned char header[8] = {0};
     int result = 0;
-    int color_type, bit_depth;
-    size_t bytesRead;
 
-    snprintf(resPath, sizeof(resPath)-1, "/ctres/gui/%s.png", name);
-    resPath[sizeof(resPath)-1] = '\0';
-    FILE* fp = fopen(resPath, "rb");
-    if (fp == NULL) {
-        fp = fopen(name, "rb");
-        if (fp == NULL) {
-            result = -1;
-            goto exit;
-        }
+    if(*name != '/') {
+        snprintf(resPath, sizeof(resPath), "/res/images/%s.png", name);
+    }else{
+        strlcpy(resPath,name,sizeof(resPath));
     }
 
-    bytesRead = fread(header, 1, sizeof(header), fp);
+    FILE* fp = fopen(resPath, "rb");
+    if (fp == NULL) {
+        result = -1;
+        goto exit;
+    }
+
+    size_t bytesRead = fread(header, 1, sizeof(header), fp);
     if (bytesRead != sizeof(header)) {
         result = -2;
         goto exit;
@@ -104,6 +98,7 @@ static int open_png(const char* name, png_structp* png_ptr, png_infop* info_ptr,
     png_set_sig_bytes(*png_ptr, sizeof(header));
     png_read_info(*png_ptr, *info_ptr);
 
+    int color_type, bit_depth;
     png_get_IHDR(*png_ptr, *info_ptr, width, height, &bit_depth,
             &color_type, NULL, NULL, NULL);
 
@@ -120,10 +115,23 @@ static int open_png(const char* name, png_structp* png_ptr, png_infop* info_ptr,
         // channel, because minui doesn't support alpha channels in
         // general.
         png_set_palette_to_rgb(*png_ptr);
-        *channels = 3;
-    } else if (color_type == PNG_COLOR_TYPE_PALETTE) {
-        png_set_palette_to_rgb(*png_ptr);
+    } else {
+        fprintf(stderr, "minui doesn't support PNG depth %d channels %d color_type %d\n",
+                bit_depth, *channels, color_type);
+        result = -7;
+        goto exit;
     }
+
+    if (png_get_valid(*png_ptr, *info_ptr, PNG_INFO_tRNS)) {
+        fprintf(stdout,"Has PNG_INFO_tRNS!\n");
+        png_set_tRNS_to_alpha(png_ptr);
+    }
+
+    png_read_update_info(*png_ptr, *info_ptr);
+    png_get_IHDR(*png_ptr, *info_ptr, width, height, &bit_depth,
+            &color_type, NULL, NULL, NULL);
+
+    *channels = png_get_channels(*png_ptr, *info_ptr);
 
     return result;
 
@@ -147,16 +155,16 @@ static int open_png(const char* name, png_structp* png_ptr, png_infop* info_ptr,
 
 // Allocate and return a gr_surface sufficient for storing an image of
 // the indicated size in the framebuffer pixel format.
-static GGLSurface* init_display_surface(png_uint_32 width, png_uint_32 height) {
-    GGLSurface* surface;
+static gr_surface init_display_surface(png_uint_32 width, png_uint_32 height) {
+    gr_surface surface;
 
-    surface = (GGLSurface*) malloc_surface(width * height * 4);
+    surface = malloc_surface(width * height * 4);
     if (surface == NULL) return NULL;
 
-    surface->version = sizeof(GGLSurface);
     surface->width = width;
     surface->height = height;
-    surface->stride = width;
+    surface->row_bytes = width * 4;
+    surface->pixel_bytes = 4;
 
     return surface;
 }
@@ -200,14 +208,15 @@ static void transform_rgb_to_draw(unsigned char* input_row,
             break;
 
         case 4:
+        case 6:
             // copy RGBA to RGBX
             memcpy(output_row, input_row, width*4);
             break;
     }
 }
 
-int res_create_surface(const char* name, gr_surface* pSurface) {
-    GGLSurface* surface = NULL;
+int res_create_display_surface(const char* name, gr_surface* pSurface) {
+    gr_surface surface = NULL;
     int result = 0;
     png_structp png_ptr = NULL;
     png_infop info_ptr = NULL;
@@ -225,20 +234,19 @@ int res_create_surface(const char* name, gr_surface* pSurface) {
         goto exit;
     }
 
+#if defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
+    png_set_bgr(png_ptr);
+#endif
+
     unsigned char* p_row = malloc(width * 4);
     unsigned int y;
     for (y = 0; y < height; ++y) {
         png_read_row(png_ptr, p_row, NULL);
-        transform_rgb_to_draw(p_row, surface->data + y * width * 4, channels, width);
+        transform_rgb_to_draw(p_row, surface->data + y * surface->row_bytes, channels, width);
     }
     free(p_row);
 
-    if (channels == 3)
-        surface->format = GGL_PIXEL_FORMAT_RGBX_8888;
-    else
-        surface->format = GGL_PIXEL_FORMAT_RGBA_8888;
-
-    *pSurface = (gr_surface) surface;
+    *pSurface = surface;
 
   exit:
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -280,7 +288,7 @@ int res_create_multi_display_surface(const char* name, int* frames, gr_surface**
         goto exit;
     }
 
-    surface = malloc(*frames * sizeof(GGLSurface));
+    surface = malloc(*frames * sizeof(gr_surface));
     if (surface == NULL) {
         result = -8;
         goto exit;
@@ -293,25 +301,20 @@ int res_create_multi_display_surface(const char* name, int* frames, gr_surface**
         }
     }
 
+#if defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
+    png_set_bgr(png_ptr);
+#endif
+
     unsigned char* p_row = malloc(width * 4);
     unsigned int y;
     for (y = 0; y < height; ++y) {
         png_read_row(png_ptr, p_row, NULL);
         int frame = y % *frames;
-        GGLSurface* p = (GGLSurface*) surface[frame];
-        unsigned char* out_row = p->data +
-            (y / *frames) * width * 4;
+        unsigned char* out_row = surface[frame]->data +
+            (y / *frames) * surface[frame]->row_bytes;
         transform_rgb_to_draw(p_row, out_row, channels, width);
     }
     free(p_row);
-
-    for (i = 0; i < *frames; ++i) {
-        GGLSurface* p = (GGLSurface*) surface[i];
-        if (channels == 3)
-            p->format = GGL_PIXEL_FORMAT_RGBX_8888;
-        else
-            p->format = GGL_PIXEL_FORMAT_RGBA_8888;
-    }
 
     *pSurface = (gr_surface*) surface;
 
@@ -329,9 +332,143 @@ exit:
     return result;
 }
 
-void res_free_surface(gr_surface surface) {
-    GGLSurface* pSurface = (GGLSurface*) surface;
-    if (pSurface) {
-        free(pSurface);
+int res_create_alpha_surface(const char* name, gr_surface* pSurface) {
+    gr_surface surface = NULL;
+    int result = 0;
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    png_uint_32 width, height;
+    png_byte channels;
+
+    *pSurface = NULL;
+
+    result = open_png(name, &png_ptr, &info_ptr, &width, &height, &channels);
+    if (result < 0) return result;
+
+    if (channels != 1) {
+        result = -7;
+        goto exit;
     }
+
+    surface = malloc_surface(width * height);
+    if (surface == NULL) {
+        result = -8;
+        goto exit;
+    }
+    surface->width = width;
+    surface->height = height;
+    surface->row_bytes = width;
+    surface->pixel_bytes = 1;
+
+#if defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
+    png_set_bgr(png_ptr);
+#endif
+
+    unsigned char* p_row;
+    unsigned int y;
+    for (y = 0; y < height; ++y) {
+        p_row = surface->data + y * surface->row_bytes;
+        png_read_row(png_ptr, p_row, NULL);
+    }
+
+    *pSurface = surface;
+
+  exit:
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    if (result < 0 && surface != NULL) free(surface);
+    return result;
+}
+
+static int matches_locale(const char* loc, const char* locale) {
+    if (locale == NULL) return 0;
+
+    if (strcmp(loc, locale) == 0) return 1;
+
+    // if loc does *not* have an underscore, and it matches the start
+    // of locale, and the next character in locale *is* an underscore,
+    // that's a match.  For instance, loc == "en" matches locale ==
+    // "en_US".
+
+    int i;
+    for (i = 0; loc[i] != 0 && loc[i] != '_'; ++i);
+    if (loc[i] == '_') return 0;
+
+    return (strncmp(locale, loc, i) == 0 && locale[i] == '_');
+}
+
+int res_create_localized_alpha_surface(const char* name,
+                                       const char* locale,
+                                       gr_surface* pSurface) {
+    gr_surface surface = NULL;
+    int result = 0;
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    png_uint_32 width, height;
+    png_byte channels;
+
+    *pSurface = NULL;
+
+    if (locale == NULL) {
+        surface = malloc_surface(0);
+        surface->width = 0;
+        surface->height = 0;
+        surface->row_bytes = 0;
+        surface->pixel_bytes = 1;
+        goto exit;
+    }
+
+    result = open_png(name, &png_ptr, &info_ptr, &width, &height, &channels);
+    if (result < 0) return result;
+
+    if (channels != 1) {
+        result = -7;
+        goto exit;
+    }
+
+    unsigned char* row = malloc(width);
+    png_uint_32 y;
+    for (y = 0; y < height; ++y) {
+        png_read_row(png_ptr, row, NULL);
+        int w = (row[1] << 8) | row[0];
+        int h = (row[3] << 8) | row[2];
+        int len = row[4];
+        char* loc = (char*)row+5;
+
+        if (y+1+h >= height || matches_locale(loc, locale)) {
+            printf("  %20s: %s (%d x %d @ %d)\n", name, loc, w, h, y);
+
+            surface = malloc_surface(w*h);
+            if (surface == NULL) {
+                result = -8;
+                goto exit;
+            }
+            surface->width = w;
+            surface->height = h;
+            surface->row_bytes = w;
+            surface->pixel_bytes = 1;
+
+            int i;
+            for (i = 0; i < h; ++i, ++y) {
+                png_read_row(png_ptr, row, NULL);
+                memcpy(surface->data + i*w, row, w);
+            }
+
+            *pSurface = (gr_surface) surface;
+            break;
+        } else {
+            int i;
+            for (i = 0; i < h; ++i, ++y) {
+                png_read_row(png_ptr, row, NULL);
+            }
+        }
+    }
+
+exit:
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    if (result < 0 && surface != NULL) free(surface);
+    return result;
+}
+
+void res_free_surface(gr_surface surface) {
+    free(surface);
 }

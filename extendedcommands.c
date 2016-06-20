@@ -46,7 +46,7 @@
 #include "cutils/properties.h"
 #include "install.h"
 #include "make_ext4fs.h"
-#include "minui/minui.h"
+#include "minuictr/minui.h"
 #include "minzip/DirUtil.h"
 #include "roots.h"
 #include "recovery_ui.h"
@@ -1078,7 +1078,7 @@ int format_device(const char *device, const char *path, const char *fs_type) {
         }
         return 0;
     }
-
+#ifdef USE_F2FS
     if (strcmp(v->fs_type, "f2fs") == 0) {
         if (length < 0) {
 			LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
@@ -1100,7 +1100,7 @@ int format_device(const char *device, const char *path, const char *fs_type) {
         }
         return 0;
     }
-
+#endif
     return format_unknown_device(device, path, fs_type);
 }
 
@@ -2196,7 +2196,7 @@ void format_sdcard(const char* volume) {
 
     const char* headers[] = {"Format device:", volume, "", NULL };
 
-    char* list[] = { "default",
+    static char* list[] = { "default",
 			        "ext2",
 			        "ext3",
 			        "ext4",
@@ -2500,13 +2500,22 @@ void show_carliv_menu() {
 				if (!ui_text_visible()) return;
 				break;  
              case 2:
+				ui_set_log_stdout(0);
+				ui_set_background(BACKGROUND_ICON_NONE);
+				ui_print(EXPAND(RECOVERY_VERSION)" ** Android "EXPAND(RECOVERY_BUILD_OS)"\n");
+			    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
                 ui_print("Based on Clockworkmod recovery.\n");
                 ui_print("This is a Recovery made by carliv from xda with Clockworkmod base and many improvements inspired from TWRP, PhilZ  or created by carliv.\n");
                 ui_print("With full touch support module developed by PhilZ for PhilZ Touch Recovery, ported here by carliv.\n");
 				if (volume_for_path("/custpack") != NULL)
 					ui_print("[*] With Custpack partition support for Alcatel or TCL phones\n");
 				ui_print("For Aroma File Manager is recommended version 1.80 - Calung, from amarullz xda thread, because it has a full touch support in most of devices.\n");
-				ui_print("Thank you all!\n");
+				ui_print("Thank you all!\n\n");
+				ui_print("Return to menu with any key.\n");
+				ui_wait_key();
+                ui_clear_key_queue();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+                ui_set_log_stdout(1);
                 break;                  
              case 3:
                 toggle_rainbow();
@@ -2570,9 +2579,11 @@ void show_advanced_menu() {
                 break;
 			}
             case 2:
-                ui_printlogtail(24);
+	            ui_set_background(BACKGROUND_ICON_NONE);
+                ui_printlogtail(32);
                 ui_wait_key();
                 ui_clear_key_queue();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
                 break;
             case 3:
             {
