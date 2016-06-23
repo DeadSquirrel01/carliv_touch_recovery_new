@@ -129,7 +129,7 @@ service healthd /sbin/healthd -r
     critical
     seclabel u:r:healthd:s0
 
-service recovery /sbin/ctr
+service recovery /sbin/recovery
 
 service setup_adbd /sbin/setup_adbd
     oneshot

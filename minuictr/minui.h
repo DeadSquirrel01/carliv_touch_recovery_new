@@ -49,6 +49,15 @@
 extern "C" {
 #endif
 
+typedef struct {
+    int width;
+    int height;
+    int row_bytes;
+    int pixel_bytes;
+    unsigned char* data;
+    __u32 format;
+} GRSurface;
+
 typedef void* gr_surface;
 typedef unsigned short gr_pixel;
 
@@ -65,19 +74,12 @@ void gr_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a
 void gr_fill(int x1, int y1, int x2, int y2);
 int gr_text(int x, int y, const char *s, int bold);
 void gr_texticon(int x, int y, gr_surface icon);
-int gr_measure(const char *s);
 void gr_font_size(int *x, int *y);
 void gr_get_memory_surface(gr_surface);
 
 void gr_blit(gr_surface source, int sx, int sy, int w, int h, int dx, int dy);
 unsigned int gr_get_width(gr_surface surface);
 unsigned int gr_get_height(gr_surface surface);
-
-// overlays
-int getFbXres(void);
-int getLeftSplit(void);
-void setDisplaySplit(void);
-bool isDisplaySplit(void);
 
 // input event structure, include <linux/input.h> for the definition.
 // see http://www.mjmwired.net/kernel/Documentation/input/ for info.

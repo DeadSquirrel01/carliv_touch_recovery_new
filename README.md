@@ -1,9 +1,8 @@
-__<center><big>**Carliv Touch Recovery**</big></center>__
+<p align="center"><big><b>Carliv Touch Recovery</b></big></p>
 
-__Home page__
-http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290
+[**Home page**](http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290)
 
-- version 6.3 is for Marshmallow (cm 13 or aicp-mm6.0).
+- version 6.4 is for Marshmallow (cm 13 or aicp-mm6.0).
 The version starting number is related to android version.
 
 This is a CWM based recovery and I did put up some work to update it to marshmallow (cm-13) after official cwm development stopped at kitkat. It works with *MARSHMALLOW* kernels and it builds with cm 13 or aicp-mm6.0. 

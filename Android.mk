@@ -57,7 +57,7 @@ endif
 ADDITIONAL_RECOVERY_FILES := $(shell echo $$ADDITIONAL_RECOVERY_FILES)
 LOCAL_SRC_FILES += $(ADDITIONAL_RECOVERY_FILES)
 
-LOCAL_MODULE := ctr
+LOCAL_MODULE := recovery
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 
@@ -73,7 +73,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v6.3
+RECOVERY_VERSION := $(RECOVERY_NAME) v6.4
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -149,6 +149,8 @@ LOCAL_STATIC_LIBRARIES := \
     libminzip \
     libz \
     libminuictr \
+    libadf \
+    libdrm \
     libpng \
     libpixelflinger_static \
     libedify \
@@ -253,7 +255,6 @@ RECOVERY_BUSYBOX_SYMLINKS := $(addprefix $(TARGET_RECOVERY_ROOT_OUT)/sbin/,$(fil
 
 LOCAL_ADDITIONAL_DEPENDENCIES += \
     permissive.sh \
-    killrecovery.sh \
     nandroid-md5.sh \
     parted \
     sdparted    
@@ -349,14 +350,6 @@ LOCAL_SRC_FILES := nandroid-md5.sh
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := killrecovery.sh
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_CLASS := RECOVERY_EXECUTABLES
-LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
-LOCAL_SRC_FILES := killrecovery.sh
-include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
 LOCAL_MODULE := libverifier
 LOCAL_MODULE_TAGS := tests
 LOCAL_SRC_FILES := \
@@ -378,6 +371,7 @@ LOCAL_STATIC_LIBRARIES := \
 	libminuictr \
 	libminzip \
 	libcutils \
+	libc++_static \
 	libc
 LOCAL_C_INCLUDES += \
 	system/extras/ext4_utils \

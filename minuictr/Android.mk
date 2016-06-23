@@ -1,13 +1,13 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS += -Wno-unused-parameter
-LOCAL_SRC_FILES := graphics_overlay.c events.c resources.c
-ifneq ($(BOARD_CUSTOM_GRAPHICS),)
-  LOCAL_SRC_FILES += $(BOARD_CUSTOM_GRAPHICS)
-else
-  LOCAL_SRC_FILES += graphics.c
-endif
+LOCAL_CFLAGS += -Wno-unused-parameter -std=gnu11
+LOCAL_SRC_FILES := \
+    events.c \
+    graphics.c \
+    graphics_fbdev.c \
+    graphics_overlay.c \
+    resources.c
 
 ifeq ($(TARGET_USES_QCOM_BSP), true)
   LOCAL_CFLAGS += -DMSM_BSP
@@ -22,19 +22,35 @@ ifeq ($(TARGET_USES_QCOM_BSP), true)
     endif
   endif
 else
-	LOCAL_C_INCLUDES += $(commands_recovery_local_path)/minuictr/include
+  LOCAL_C_INCLUDES += $(commands_recovery_local_path)/minuictr/include
+    LOCAL_CFLAGS += -DHAS_ADF
+    LOCAL_SRC_FILES += graphics_adf.c
+    LOCAL_WHOLE_STATIC_LIBRARIES += libadf
+    LOCAL_C_INCLUDES += system/core/adf/libadf/include
 endif
+
+LOCAL_CFLAGS += -DHAS_DRM
+LOCAL_SRC_FILES += graphics_drm.c
+LOCAL_WHOLE_STATIC_LIBRARIES += libdrm
+LOCAL_C_INCLUDES += external/libdrm external/libdrm/include/drm
 
 LOCAL_C_INCLUDES += \
 	$(commands_recovery_local_path)/minuictr/fonts \
     external/libpng \
     external/zlib \
-    system/core/libpixelflinger/include \
     system/core/include/pixelflinger
+
+ifeq ($(USE_NEW_ION_HEAP), true)
+  LOCAL_CFLAGS += -DNEW_ION_HEAP
+endif
 
 LOCAL_STATIC_LIBRARIES += libpng
 LOCAL_WHOLE_STATIC_LIBRARIES := libpixelflinger_static
 LOCAL_MODULE := libminuictr
+
+ifeq ($(subst ",,$(TARGET_RECOVERY_FORCE_PIXEL_FORMAT)),RGB_565)
+  LOCAL_CFLAGS += -DRECOVERY_FORCE_RGB_565
+endif
 
 ifeq ($(subst ",,$(TARGET_RECOVERY_PIXEL_FORMAT)),ABGR_8888)
   LOCAL_CFLAGS += -DRECOVERY_ABGR
@@ -57,6 +73,14 @@ endif
 
 ifeq ($(BOARD_HAS_FLIPPED_SCREEN), true)
 LOCAL_CFLAGS += -DBOARD_HAS_FLIPPED_SCREEN
+endif
+
+ifeq ($(BOARD_SCREEN_BLANK_ON_BOOT), true)
+    LOCAL_CFLAGS += -DBOARD_SCREEN_BLANK_ON_BOOT
+endif
+
+ifneq ($(BOARD_RECOVERY_NEEDS_FBIOPAN_DISPLAY),)
+  LOCAL_CFLAGS += -DBOARD_RECOVERY_NEEDS_FBIOPAN_DISPLAY
 endif
 
 ifneq ($(BOARD_USE_CUSTOM_RECOVERY_FONT),)

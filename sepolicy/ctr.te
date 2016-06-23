@@ -1,23 +1,4 @@
 recovery_only(`
 # Allow recovery to set permissive mode
-type ctr;
-permissive ctr;
 permissive recovery;
-  
-# Allow read / write access to /dev/null
-allow domain null_device:chr_file rw_file_perms;
-
-allow ctr proc:file w_file_perms;
-allow ctr system_file:file { rw_file_perms x_file_perms };
-auditallow ctr exec_type:dir { create_dir_perms relabelfrom relabelto };
-allow ctr data_file_type:file { rw_file_perms x_file_perms };
-allow ctr data_file_type:dir { r_dir_perms create_dir_perms };
-# Reboot the device
-allow ctr powerctl_prop:property_service set;
-unix_socket_connect(ctr, property, init)
-
-# Start/stop adbd via ctl.start adbd
-allow ctr ctl_default_prop:property_service set;
-# Run toolbox.
-allow ctr toolbox_exec:file { rw_file_perms x_file_perms };
 ')

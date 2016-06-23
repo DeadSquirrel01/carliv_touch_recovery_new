@@ -21,6 +21,7 @@ LOCAL_MODULE_TAGS := eng
 LOCAL_SRC_FILES := $(updater_src_files)
 
 LOCAL_CFLAGS += -Wno-unused-parameter
+LOCAL_CFLAGS += -DUSE_EXT4
 LOCAL_C_INCLUDES += system/extras/ext4_utils
 LOCAL_STATIC_LIBRARIES += \
     libext4_utils_static \

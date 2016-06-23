@@ -53,7 +53,7 @@ static int gShowBackButton = 0;
 UIParameters ui_parameters = {
     6,       // indeterminate progress bar frames
     20,      // fps
-    5,       // installation icon frames (0 == static image)
+    0,       // installation icon frames (0 == static image)
     60, 190, // installation icon overlay offset
 };
 
@@ -1794,6 +1794,12 @@ void ui_show_text(int visible) {
     if (show_text) show_text_ever = 1;
     update_screen_locked();
     pthread_mutex_unlock(&gUpdateMutex);
+}
+
+void ui_clear_text()
+{
+    memset(text, 0, sizeof(text));
+    text_col = text_row = 0;
 }
 
 static int usb_connected() {
