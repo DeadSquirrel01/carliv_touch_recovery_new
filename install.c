@@ -36,6 +36,8 @@
 #include "verifier.h"
 #include "recovery_ui.h"
 
+#include "cutils/properties.h"
+
 #include "extendedcommands.h"
 
 #include "propsrvc/legacy_property_service.h" // legacy update-binary compatibility
@@ -47,7 +49,6 @@
 #define ASSUMED_UPDATE_BINARY_NAME  "META-INF/com/google/android/update-binary"
 #define PUBLIC_KEYS_FILE "/res/keys"
 
-static const char *LAST_INSTALL_FILE = "/cache/recovery/last_install";
 static const char *DEV_PROP_PATH = "/dev/__properties__";
 static const char *DEV_PROP_BACKUP_PATH = "/dev/__properties_backup__";
 static bool legacy_props_env_initd = false;
@@ -89,7 +90,7 @@ static int unset_legacy_props() {
 
 // If the package contains an update binary, extract it and run it.
 static int
-try_update_binary(const char *path, ZipArchive *zip) {
+try_update_binary(const char *path, ZipArchive *zip, int* wipe_cache) {
 
     const ZipEntry* binary_entry =
             mzFindZipEntry(zip, ASSUMED_UPDATE_BINARY_NAME);
@@ -220,13 +221,15 @@ try_update_binary(const char *path, ZipArchive *zip) {
 
     pid_t pid = fork();
     if (pid == 0) {
-        setenv("UPDATE_PACKAGE", path, 1);
+        umask(022);
         close(pipefd[0]);
         execv(binary, (char* const*)args);
         fprintf(stdout, "E:Can't run %s (%s)\n", binary, strerror(errno));
         _exit(-1);
     }
     close(pipefd[1]);
+    
+    *wipe_cache = 0;
 
     char buffer[1024];
     FILE* from_child = fdopen(pipefd[0], "r");
@@ -254,6 +257,8 @@ try_update_binary(const char *path, ZipArchive *zip) {
                 ui_print("\n");
             }
             fflush(stdout);
+        } else if (strcmp(command, "wipe_cache") == 0) {
+            *wipe_cache = 1;
         } else {
             LOGE("unknown command [%s]\n", command);
         }
@@ -273,28 +278,55 @@ try_update_binary(const char *path, ZipArchive *zip) {
     }
 
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        LOGE("Error in %s\n(Status %d)\n", path, WEXITSTATUS(status));
-        mzCloseZipArchive(zip);
+        if (WEXITSTATUS(status) != 7) {
+           LOGE("Installation error in %s\n(Status %d)\n", path, WEXITSTATUS(status));
+        } else {
+           LOGE("Failed to install %s\n", path);
+           LOGE("Please take note of all the above lines for reports\n");
+        }
         return INSTALL_ERROR;
     }
     
-    mzCloseZipArchive(zip);
     return INSTALL_SUCCESS;
 }
 
 static int
-really_install_package(const char *path)
+really_install_package(const char *path, int* wipe_cache, bool needs_mount)
 {
+	int ret = 0;
+	
     ui_set_background(BACKGROUND_ICON_INSTALLING);
     ui_print("Finding update package...\n");
     ui_show_indeterminate_progress();
-    ensure_path_unmounted("/system");
+    
+    // Resolve symlink in case legacy /sdcard path is used
+    // Requires: symlink uses absolute path
+    char new_path[PATH_MAX];
+    if (strlen(path) > 1) {
+        char *rest = strchr(path + 1, '/');
+        if (rest != NULL) {
+            int readlink_length;
+            int root_length = rest - path;
+            char *root = (char *)malloc(root_length + 1);
+            strncpy(root, path, root_length);
+            root[root_length] = 0;
+            readlink_length = readlink(root, new_path, PATH_MAX);
+            if (readlink_length > 0) {
+                strncpy(new_path + readlink_length, rest, PATH_MAX - readlink_length);
+                path = new_path;
+            }
+            free(root);
+        }
+    }
 
     LOGI("Update location: %s\n", path);
 
-    if (ensure_path_mounted(path) != 0) {
-        LOGE("Can't mount %s\n", path);
-        return INSTALL_CORRUPT;
+    if (path && needs_mount) {
+        if (path[0] == '@') {
+            ensure_path_mounted(path+1);
+        } else {
+            ensure_path_mounted(path);
+        }
     }
 
     MemMapping map;
@@ -315,6 +347,8 @@ really_install_package(const char *path)
             return INSTALL_CORRUPT;
         }
         LOGI("%d key(s) loaded from %s\n", numKeys, PUBLIC_KEYS_FILE);
+        
+        set_perf_mode(1);
 
         // Give verification half the progress bar...
         ui_print("Verifying update package...\n");
@@ -330,7 +364,8 @@ really_install_package(const char *path)
             sysReleaseMap(&map);
             ui_show_text(1);
             if (!confirm_selection("Install Untrusted Package?", "Yes - Install untrusted zip"))
-                return INSTALL_CORRUPT;
+                ret = INSTALL_CORRUPT;
+                goto out;
         }
     }
 
@@ -341,31 +376,40 @@ really_install_package(const char *path)
     if (err != 0) {
         LOGE("Can't open %s\n(%s)\n", path, err != -1 ? strerror(err) : "bad");
         sysReleaseMap(&map);
-        return INSTALL_CORRUPT;
+        ret = INSTALL_CORRUPT;
+        goto out;
     }
 
     /* Verify and install the contents of the package.
      */
     ui_print("Installing update...\n");
-    int result = try_update_binary(path, &zip);
+    int result = try_update_binary(path, &zip, wipe_cache);
 
     sysReleaseMap(&map);
 
-    return result;
+out:
+    set_perf_mode(0);
+    return ret;
 }
 
 int
-install_package(const char* path)
+install_package(const char* path, int* wipe_cache, const char* install_file,
+                bool needs_mount)
 {
-    FILE* install_log = fopen_path(LAST_INSTALL_FILE, "w");
+    FILE* install_log = fopen_path(install_file, "w");
     if (install_log) {
         fputs(path, install_log);
         fputc('\n', install_log);
     } else {
         LOGE("failed to open last_install: %s\n", strerror(errno));
     }
-    int result = really_install_package(path);
-
+    int result;
+    if (setup_install_mounts() != 0) {
+        LOGE("failed to set up expected mounts for install; aborting\n");
+        result = INSTALL_ERROR;
+    } else {
+        result = really_install_package(path, wipe_cache, needs_mount);
+    }
 #ifdef ENABLE_LOKI
     if (result == INSTALL_SUCCESS && loki_support_enabled() > 0) {
         ui_print("Checking if loki-fying is needed\n");
@@ -377,7 +421,11 @@ install_package(const char* path)
         fputc(result == INSTALL_SUCCESS ? '1' : '0', install_log);
         fputc('\n', install_log);
         fclose(install_log);
-        chmod(LAST_INSTALL_FILE, 0644);
     }
     return result;
+}
+
+void
+set_perf_mode(bool enable) {
+    property_set("recovery.perf.mode", enable ? "1" : "0");
 }

@@ -46,6 +46,8 @@
 
 #include "adb_install.h"
 #include "minadbd/adb.h"
+#include "fuse_sideload.h"
+#include "fuse_sdcard_provider.h"
 
 #include "extendedcommands.h"
 #include "flashutils/flashutils.h"
@@ -75,7 +77,6 @@ static const char *CACHE_ROOT = "/cache";
 static const char *FILEMANAGER = "/tmp/aromafm.zip";
 static const char *TEMPORARY_LOG_FILE = "/tmp/recovery.log";
 static const char *TEMPORARY_INSTALL_FILE = "/tmp/last_install";
-static const char *SIDELOAD_TEMP_DIR = "/tmp/sideload";
 
 extern UIParameters ui_parameters;    // from ui.c
 
@@ -414,95 +415,6 @@ static int erase_volume(const char *volume) {
     return result;
 }
 
-static char* copy_sideloaded_package(const char* original_path) {
-  if (ensure_path_mounted(original_path) != 0) {
-    LOGE("Can't mount %s\n", original_path);
-    return NULL;
-  }
-
-  if (ensure_path_mounted(SIDELOAD_TEMP_DIR) != 0) {
-    LOGE("Can't mount %s\n", SIDELOAD_TEMP_DIR);
-    return NULL;
-  }
-
-  if (mkdir(SIDELOAD_TEMP_DIR, 0700) != 0) {
-    if (errno != EEXIST) {
-      LOGE("Can't mkdir %s (%s)\n", SIDELOAD_TEMP_DIR, strerror(errno));
-      return NULL;
-    }
-  }
-
-  // verify that SIDELOAD_TEMP_DIR is exactly what we expect: a
-  // directory, owned by root, readable and writable only by root.
-  struct stat st;
-  if (stat(SIDELOAD_TEMP_DIR, &st) != 0) {
-    LOGE("failed to stat %s (%s)\n", SIDELOAD_TEMP_DIR, strerror(errno));
-    return NULL;
-  }
-  if (!S_ISDIR(st.st_mode)) {
-    LOGE("%s isn't a directory\n", SIDELOAD_TEMP_DIR);
-    return NULL;
-  }
-  if ((st.st_mode & 0777) != 0700) {
-    LOGE("%s has perms %o\n", SIDELOAD_TEMP_DIR, st.st_mode);
-    return NULL;
-  }
-  if (st.st_uid != 0) {
-    LOGE("%s owned by %lu; not root\n", SIDELOAD_TEMP_DIR, (unsigned long int)st.st_uid);
-    return NULL;
-  }
-
-  char copy_path[PATH_MAX];
-  strcpy(copy_path, SIDELOAD_TEMP_DIR);
-  strcat(copy_path, "/package.zip");
-
-  char* buffer = (char*)malloc(BUFSIZ);
-  if (buffer == NULL) {
-    LOGE("Failed to allocate buffer\n");
-    return NULL;
-  }
-
-  size_t read;
-  FILE* fin = fopen(original_path, "rb");
-  if (fin == NULL) {
-    LOGE("Failed to open %s (%s)\n", original_path, strerror(errno));
-    return NULL;
-  }
-  FILE* fout = fopen(copy_path, "wb");
-  if (fout == NULL) {
-    LOGE("Failed to open %s (%s)\n", copy_path, strerror(errno));
-    return NULL;
-  }
-
-  while ((read = fread(buffer, 1, BUFSIZ, fin)) > 0) {
-    if (fwrite(buffer, 1, read, fout) != read) {
-      LOGE("Short write of %s (%s)\n", copy_path, strerror(errno));
-      return NULL;
-    }
-  }
-
-  free(buffer);
-
-  if (fclose(fout) != 0) {
-    LOGE("Failed to close %s (%s)\n", copy_path, strerror(errno));
-    return NULL;
-  }
-
-  if (fclose(fin) != 0) {
-    LOGE("Failed to close %s (%s)\n", original_path, strerror(errno));
-    return NULL;
-  }
-
-  // "adb push" is happy to overwrite read-only files when it's
-  // running as root, but we'll try anyway.
-  if (chmod(copy_path, 0400) != 0) {
-    LOGE("Failed to chmod %s (%s)\n", copy_path, strerror(errno));
-    return NULL;
-  }
-
-  return strdup(copy_path);
-}
-
 #ifdef QCOM_HARDWARE
 // copy from philz cwm recovery
 static void parse_t_daemon_data_files() {
@@ -688,131 +600,6 @@ static int compare_string(const void* a, const void* b) {
     return strcmp(*(const char**)a, *(const char**)b);
 }
 
-static int update_directory(const char* path, const char* unmount_when_done) {
-    ensure_path_mounted(path);
-
-    const char* MENU_HEADERS[] = { "Choose a package to install:",
-                                   path,
-                                   NULL };
-    DIR* d;
-    struct dirent* de;
-    d = opendir(path);
-    if (d == NULL) {
-        LOGE("error opening %s: %s\n", path, strerror(errno));
-        if (unmount_when_done != NULL) {
-            ensure_path_unmounted(unmount_when_done);
-        }
-        return 0;
-    }
-
-    const char** headers = prepend_title(MENU_HEADERS);
-
-    int d_size = 0;
-    int d_alloc = 10;
-    char** dirs = (char**)malloc(d_alloc * sizeof(char*));
-    int z_size = 1;
-    int z_alloc = 10;
-    char** zips = (char**)malloc(z_alloc * sizeof(char*));
-    zips[0] = strdup("../");
-
-    while ((de = readdir(d)) != NULL) {
-        int name_len = strlen(de->d_name);
-
-        if (de->d_type == DT_DIR) {
-            // skip "." and ".." entries
-            if (name_len == 1 && de->d_name[0] == '.') continue;
-            if (name_len == 2 && de->d_name[0] == '.' &&
-                de->d_name[1] == '.') continue;
-
-            if (d_size >= d_alloc) {
-                d_alloc *= 2;
-                dirs = (char**)realloc(dirs, d_alloc * sizeof(char*));
-            }
-            dirs[d_size] = (char*)malloc(name_len + 2);
-            strcpy(dirs[d_size], de->d_name);
-            dirs[d_size][name_len] = '/';
-            dirs[d_size][name_len+1] = '\0';
-            ++d_size;
-        } else if (de->d_type == DT_REG &&
-                   name_len >= 4 &&
-                   strncasecmp(de->d_name + (name_len-4), ".zip", 4) == 0) {
-            if (z_size >= z_alloc) {
-                z_alloc *= 2;
-                zips = (char**)realloc(zips, z_alloc * sizeof(char*));
-            }
-            zips[z_size++] = strdup(de->d_name);
-        }
-    }
-    closedir(d);
-
-    qsort(dirs, d_size, sizeof(char*), compare_string);
-    qsort(zips, z_size, sizeof(char*), compare_string);
-
-    // append dirs to the zips list
-    if (d_size + z_size + 1 > z_alloc) {
-        z_alloc = d_size + z_size + 1;
-        zips = (char**)realloc(zips, z_alloc * sizeof(char*));
-    }
-    memcpy(zips + z_size, dirs, d_size * sizeof(char*));
-    free(dirs);
-    z_size += d_size;
-    zips[z_size] = NULL;
-
-    int result;
-    int chosen_item = 0;
-    do {
-        chosen_item = get_menu_selection(headers, zips, 1, chosen_item);
-
-        char* item = zips[chosen_item];
-        int item_len = strlen(item);
-        if (chosen_item == 0) {          // item 0 is always "../"
-            // go up but continue browsing (if the caller is update_directory)
-            result = -1;
-            break;
-        } else if (item[item_len-1] == '/') {
-            // recurse down into a subdirectory
-            char new_path[PATH_MAX];
-            strlcpy(new_path, path, PATH_MAX);
-            strlcat(new_path, "/", PATH_MAX);
-            strlcat(new_path, item, PATH_MAX);
-            new_path[strlen(new_path)-1] = '\0';  // truncate the trailing '/'
-            result = update_directory(new_path, unmount_when_done);
-            if (result >= 0) break;
-        } else {
-            // selected a zip file:  attempt to install it, and return
-            // the status to the caller.
-            char new_path[PATH_MAX];
-            strlcpy(new_path, path, PATH_MAX);
-            strlcat(new_path, "/", PATH_MAX);
-            strlcat(new_path, item, PATH_MAX);
-
-            ui_print("\n-- Install %s ...\n", path);
-            set_sdcard_update_bootloader_message();
-            char* copy = copy_sideloaded_package(new_path);
-            if (unmount_when_done != NULL) {
-                ensure_path_unmounted(unmount_when_done);
-            }
-            if (copy) {
-                result = install_package(copy);
-                free(copy);
-            } else {
-                result = INSTALL_ERROR;
-            }
-            break;
-        }
-    } while (true);
-
-    int i;
-    for (i = 0; i < z_size; ++i) free(zips[i]);
-    free(zips);
-    free(headers);
-
-    if (unmount_when_done != NULL) {
-        ensure_path_unmounted(unmount_when_done);
-    }
-    return result;
-}
-
 //=========================================/
 //=            Wipe menu part             =/
 //=              carliv@xda               =/
@@ -871,16 +658,17 @@ void wipe_data(int confirm) {
 		return;
 
 	if (is_encrypted_data()) {
-	ui_print("\n-- Formating data and data/media. Encryption will be lost...\n");
-	if (!is_encrypted_data()) ensure_path_unmounted("/data");
-	preserve_data_media(0);
-    format_volume("/data");
-    preserve_data_media(1);
-    set_encryption_state(0);
+		if (!confirm_selection("Are you sure? You will loose encryption!", "Yes"))
+			return;
+		ui_print("\n-- Formating data and data/media. Encryption will be lost...\n");
+		preserve_data_media(0);
+	    format_volume("/data");
+	    preserve_data_media(1);
+	    set_encryption_state(0);
 	} else {
-	ui_print("\n-- Wiping data...\n");
-    device_wipe_data();
-    erase_volume("/data");
+		ui_print("\n-- Wiping data...\n");
+	    device_wipe_data();
+	    erase_volume("/data");
 	}
     erase_volume("/cache");
     if (has_datadata()) {
@@ -920,6 +708,69 @@ void wipe_dalvik_cache(int confirm) {
 	ui_print("Dalvik Cache wiped.\n");
 }
 
+int install_zip(const char* packagefilepath) {
+    ui_print("\n-- Installing: %s\n", packagefilepath);
+    set_sdcard_update_bootloader_message();
+
+    int wipe_cache = 0;
+    int status = install_package(packagefilepath, &wipe_cache, TEMPORARY_INSTALL_FILE, true);
+    ui_reset_progress();
+    if (status != INSTALL_SUCCESS) {
+        copy_logs();
+        ui_set_background(BACKGROUND_ICON_ERROR);
+        LOGE("Installation aborted.\n");
+        return 1;
+    } else if (wipe_cache && erase_volume("/cache")) {
+        LOGE("Cache wipe (requested by package) failed.\n");
+    }
+#ifdef ENABLE_LOKI
+    if (loki_support_enabled) {
+        ui_print("Checking if loki-fying is needed\n");
+        status = loki_check();
+        if (status != INSTALL_SUCCESS) {
+            ui_set_background(BACKGROUND_ICON_ERROR);
+            return 1;
+        }
+    }
+#endif
+
+    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    ui_print("\nInstall from sdcard complete.\n");
+    return 0;
+}
+
+int enter_sideload_mode(int* wipe_cache) {
+
+    ensure_path_mounted(CACHE_ROOT);
+    start_sideload(wipe_cache, TEMPORARY_INSTALL_FILE);
+
+    static const char* headers[] = {  "ADB Sideload",
+                                "",
+                                NULL
+    };
+
+    static char* list[] = { "Cancel sideload", NULL };
+    
+    int status = INSTALL_NONE;
+    int item = get_menu_selection(headers, list, 0, 0);
+    if (item != GO_BACK) {
+        stop_sideload();
+    }
+    status = wait_sideload();
+
+    if (status >= 0 && status != INSTALL_NONE) {
+        if (status != INSTALL_SUCCESS) {
+            ui_set_background(BACKGROUND_ICON_ERROR);
+            ui_print("Installation aborted.\n");
+        } else if (!ui_text_visible()) {
+            return status;  // reboot if logs aren't visible
+        } else {
+            ui_print("\nInstall from ADB complete.\n");
+        }
+    }
+    return status;
+}
+
 static void headless_wait() {
     ui_show_text(0);
     const char** headers = prepend_title((const char**)MENU_HEADERS);
@@ -929,20 +780,28 @@ static void headless_wait() {
     }
 }
 
-int ui_menu_level = 1;
 int ui_root_menu = 0;
-static void prompt_and_wait() {
+static void prompt_and_wait(int status) {
     const char** headers = prepend_title((const char**)MENU_HEADERS);
+
+    switch (status) {
+        case INSTALL_SUCCESS:
+        case INSTALL_NONE:
+            ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+            break;
+
+        case INSTALL_ERROR:
+        case INSTALL_CORRUPT:
+            ui_set_background(BACKGROUND_ICON_ERROR);
+            break;
+    }
 
     for (;;) {
         finish_recovery(NULL);
-        ui_reset_progress();
-
         ui_root_menu = 1;
-        // ui_menu_level is a legacy variable that i am keeping around to prevent build breakage.
-        ui_menu_level = 0;
+        ui_reset_progress();
+       
         int chosen_item = get_menu_selection(headers, MENU_ITEMS, 0, 0);
-        ui_menu_level = 1;
         ui_root_menu = 0;
 
         // device-specific code may take some action here.  It may
@@ -950,7 +809,6 @@ static void prompt_and_wait() {
         // statement below.
         chosen_item = device_perform_action(chosen_item);
 
-        int status;
         int ret = 0;
 
         for (;;) {
@@ -1102,6 +960,8 @@ int main(int argc, char **argv) {
 
     device_ui_init(&ui_parameters);
     ui_init();
+    ui_print(EXPAND(RECOVERY_VERSION)" ** Android "EXPAND(RECOVERY_BUILD_OS)"\n");
+    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
     
     load_volume_table();
     process_volumes();
@@ -1192,7 +1052,12 @@ int main(int argc, char **argv) {
     int status = INSTALL_SUCCESS;
 
     if (update_package != NULL) {
-        status = install_package(update_package);
+        status = install_package(update_package, &wipe_cache, TEMPORARY_INSTALL_FILE, true);
+        if (status == INSTALL_SUCCESS && wipe_cache) {
+            if (erase_volume("/cache")) {
+                LOGE("Cache wipe (requested by package) failed.\n");
+            }
+        }
         if (status != INSTALL_SUCCESS) {
             copy_logs();
             ui_print("Installation aborted.\n");
@@ -1214,9 +1079,11 @@ int main(int argc, char **argv) {
             copy_logs();
             ui_print("Cache wipe failed.\n");
         }
+    } else if (sideload) {
+        status = enter_sideload_mode(&wipe_cache);
     } else {
         LOGI("Checking for extendedcommand...\n");
-        status = INSTALL_ERROR;  // No command specified
+        status = INSTALL_NONE;  // No command specified
         // we are starting up in user initiated recovery here
         // let's set up some default options
         vibration_enabled = 0;
@@ -1238,7 +1105,7 @@ int main(int argc, char **argv) {
                 ui_set_show_text(0);
             }
             else {
-                handle_failure(ret);
+                if (ret != 0) handle_failure();
             }
         } else {
             LOGI("Skipping execution of extendedcommand, file not found...\n");
@@ -1256,26 +1123,15 @@ int main(int argc, char **argv) {
 		set_encryption_state(0);
 #endif
 
-    if (sideload) {
-        signature_check_enabled = 0;
-        if (!headless)
-            ui_set_show_text(1);
-        if (0 == apply_from_adb()) {
-            status = INSTALL_SUCCESS;
-            ui_set_show_text(0);
-        }
-    }
-
     if (headless) {
         headless_wait();
     }
-    if (status != INSTALL_SUCCESS && !is_user_initiated_recovery) {
-        ui_set_show_text(1);
-        ui_set_background(BACKGROUND_ICON_ERROR);
-        handle_failure(1);
+    if (status == INSTALL_ERROR || status == INSTALL_CORRUPT) {
+        copy_logs();
+        handle_failure();
     }
     else if (status != INSTALL_SUCCESS || ui_text_visible()) {
-        prompt_and_wait();
+        prompt_and_wait(status);
     }
 
     // We reach here when in main menu we choose reboot main system or for some wipe commands on start
@@ -1290,10 +1146,4 @@ int main(int argc, char **argv) {
         reboot_main_system(ANDROID_RB_RESTART, 0, 0);
     }
     return EXIT_SUCCESS;
-}
-
-void set_perf_mode(int on) {
-    property_set("recovery.perf.mode", on ? "1" : "0");
-    if (on)
-        usleep(900000);
 }

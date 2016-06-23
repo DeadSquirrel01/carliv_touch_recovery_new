@@ -23,8 +23,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <dirent.h>
 
 #include "mtdutils/mtdutils.h"
+#include "bmlutils/bmlutils.h"
 #include "mtdutils/mounts.h"
 #include "roots.h"
 #include "common.h"
@@ -460,7 +462,50 @@ int ensure_path_unmounted(const char* path) {
     return unmount_mounted_volume(mv);
 }
 
+int rmtree_except(const char* path, const char* except)
+{
+    char pathbuf[PATH_MAX];
+    int rc = 0;
+    DIR* dp = opendir(path);
+    if (dp == NULL) {
+        return -1;
+    }
+    struct dirent* de;
+    while ((de = readdir(dp)) != NULL) {
+        if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, ".."))
+            continue;
+        if (except && !strcmp(de->d_name, except))
+            continue;
+        struct stat st;
+        snprintf(pathbuf, sizeof(pathbuf), "%s/%s", path, de->d_name);
+        rc = lstat(pathbuf, &st);
+        if (rc != 0) {
+            LOGE("Failed to stat %s\n", pathbuf);
+            break;
+        }
+        if (S_ISDIR(st.st_mode)) {
+            rc = rmtree_except(pathbuf, NULL);
+            if (rc != 0)
+                break;
+            rc = rmdir(pathbuf);
+        }
+        else {
+            rc = unlink(pathbuf);
+        }
+        if (rc != 0) {
+            LOGI("Failed to remove %s: %s\n", pathbuf, strerror(errno));
+            break;
+        }
+    }
+    closedir(dp);
+    return rc;
+}
+
 int format_volume(const char* volume) {
+	if (is_data_media_volume_path(volume)) {
+        return format_unknown_device(NULL, volume, NULL);
+    }
+    
     Volume* v = volume_for_path(volume);
     if (v == NULL) {
         // silent failure for sd-ext
@@ -477,22 +522,18 @@ int format_volume(const char* volume) {
         }
     }
 
-    // check to see if /data is being formatted, and if it is /data/media
-    // Note: the /sdcard check is redundant probably, just being safe.
-    if (strcmp(volume, "/data") == 0 && is_data_media() && is_data_media_preserved()) {
-        return format_unknown_device(NULL, volume, NULL);
-    }
-
     if (strcmp(v->fs_type, "ramdisk") == 0) {
         // you can't format the ramdisk.
         LOGE("can't format_volume \"%s\"", volume);
         return -1;
     }
     if (strcmp(v->mount_point, volume) != 0) {
-#if 0
-        LOGE("can't give path \"%s\" to format_volume\n", volume);
-        return -1;
-#endif
+        return format_unknown_device(NULL, volume, NULL);
+    }
+
+    // check to see if /data is being formatted, and if it is /data/media
+    // Note: the /sdcard check is redundant probably, just being safe.
+    if (strcmp(volume, "/data") == 0 && is_data_media() && is_data_media_preserved()) {
         return format_unknown_device(NULL, volume, NULL);
     }
 
@@ -565,6 +606,31 @@ int format_volume(const char* volume) {
     return format_unknown_device(v->device, volume, v->fs_type);
 }
 
+// mount /cache and unmount all other partitions before installing zip file
+int setup_install_mounts() {
+	device_volumes = get_device_volumes();
+    if (device_volumes == NULL) {
+        LOGE("can't set up install mounts: no fstab loaded\n");
+        return -1;
+    }
+
+    int i;
+    for (i = 0; i < get_num_volumes(); i++) {
+        Volume* v = get_device_volumes() + i;
+
+        if (strcmp(v->mount_point, "/tmp") == 0 ||
+                strcmp(v->mount_point, "/cache") == 0) {
+            if (ensure_path_mounted(v->mount_point) != 0) return -1;
+
+        } else if (is_encrypted_data()) {
+            if (strcmp(v->mount_point, "/data") != 0 && ensure_path_unmounted(v->mount_point) != 0) return -1;
+        } else {
+            if (ensure_path_unmounted(v->mount_point) != 0) return -1;
+        }
+    }
+    return 0;
+}
+
 static int data_media_preserved_state = 1;
 void preserve_data_media(int val) {
     data_media_preserved_state = val;
@@ -572,6 +638,195 @@ void preserve_data_media(int val) {
 
 int is_data_media_preserved() {
     return data_media_preserved_state;
+}
+
+int format_device(const char *device, const char *path, const char *fs_type) {
+	
+    if (is_data_media_volume_path(path)) {
+        return format_unknown_device(NULL, path, NULL);
+    }    
+
+    Volume* v = volume_for_path(path);
+    if (v == NULL) {
+        // silent failure for sd-ext
+        if (strcmp(path, "/sd-ext") != 0)
+            LOGE("unknown volume '%s'\n", path);
+        return -1;
+    }
+    
+    if (strcmp(fs_type, "ramdisk") == 0) {
+        // you can't format the ramdisk.
+        LOGE("can't format_volume \"%s\"", path);
+        return -1;
+    }
+
+    if (strcmp(fs_type, "rfs") == 0) {
+        if (ensure_path_unmounted(path) != 0) {
+            LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
+            return -1;
+        }
+        if (0 != format_rfs_device(device, path)) {
+            LOGE("format_volume: format_rfs_device failed on %s\n", device);
+            return -1;
+        }
+        return 0;
+    }
+
+    if (strcmp(v->mount_point, path) != 0) {
+        return format_unknown_device(v->device, path, NULL);
+    }
+    
+    if (strcmp(path, "/data") == 0 && is_data_media() && is_data_media_preserved()) {
+        return format_unknown_device(NULL, path, NULL);
+    }
+
+    if (ensure_path_unmounted(path) != 0) {
+        LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
+        return -1;
+    }
+
+    if (strcmp(fs_type, "yaffs2") == 0 || strcmp(fs_type, "mtd") == 0) {
+        mtd_scan_partitions();
+        const MtdPartition* partition = mtd_find_partition_by_name(device);
+        if (partition == NULL) {
+            LOGE("format_volume: no MTD partition \"%s\"\n", device);
+            return -1;
+        }
+
+        MtdWriteContext *write = mtd_write_partition(partition);
+        if (write == NULL) {
+            LOGW("format_volume: can't open MTD \"%s\"\n", device);
+            return -1;
+        } else if (mtd_erase_blocks(write, -1) == (off_t) - 1) {
+            LOGW("format_volume: can't erase MTD \"%s\"\n", device);
+            mtd_write_close(write);
+            return -1;
+        } else if (mtd_write_close(write)) {
+            LOGW("format_volume: can't close MTD \"%s\"\n", device);
+            return -1;
+        }
+        return 0;
+    }
+    
+	int result;
+	ssize_t length = 0;
+	if (v->length != 0) length = v->length;
+    if (strcmp(fs_type, "ext4") == 0) {
+        result = make_ext4fs(device, length, v->mount_point, sehandle);
+        if (result != 0) {
+            LOGE("format_volume: make_ext4fs failed on %s\n", device);
+            return -1;
+        }
+        return 0;
+    }
+#ifdef USE_F2FS
+    if (strcmp(v->fs_type, "f2fs") == 0) {
+        if (length < 0) {
+			LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
+			return -1;
+		}
+		char *num_sectors;
+		if (asprintf(&num_sectors, "%zd", length / 512) <= 0) {
+			LOGE("format_volume: failed to create %s command for %s\n", v->fs_type, v->device);
+			return -1;
+		}
+		const char *f2fs_path = "/sbin/mkfs.f2fs";
+		const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", v->device, num_sectors, NULL};
+
+		result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
+		free(num_sectors);
+        if (result != 0) {
+            LOGE("format_volume: make f2fs failed on %s\n", v->device);
+            return -1;
+        }
+        return 0;
+    }
+#endif
+    return format_unknown_device(device, path, fs_type);
+}
+
+extern int format_ext2_device(const char *device);
+extern int format_ext3_device(const char *device);
+
+int format_unknown_device(const char *device, const char* path, const char *fs_type) {
+    LOGI("Formatting unknown device.\n");
+
+    if (fs_type != NULL && get_flash_type(fs_type) != UNSUPPORTED)
+        return erase_raw_partition(fs_type, device);
+
+    // if this is SDEXT:, don't worry about it if it does not exist.
+    if (0 == strcmp(path, "/sd-ext")) {
+        struct stat st;
+        Volume *vol = volume_for_path("/sd-ext");
+        if (vol == NULL || 0 != stat(vol->device, &st)) {
+            LOGI("No app2sd partition found. Skipping format of /sd-ext.\n");
+            return 0;
+        }
+    }
+
+    if (NULL != fs_type) {
+        if (strcmp("ext3", fs_type) == 0) {
+            LOGI("Formatting ext3 device.\n");
+            if (0 != ensure_path_unmounted(path)) {
+                LOGE("Error while unmounting %s.\n", path);
+                return -12;
+            }
+            return format_ext3_device(device);
+        }
+
+        if (strcmp("ext2", fs_type) == 0) {
+            LOGI("Formatting ext2 device.\n");
+            if (0 != ensure_path_unmounted(path)) {
+                LOGE("Error while unmounting %s.\n", path);
+                return -12;
+            }
+            return format_ext2_device(device);
+        }
+    }
+
+    if (0 != ensure_path_mounted(path)) {
+        ui_print("Error mounting %s!\n", path);
+        ui_print("Skipping format...\n");
+        return -1;
+    }
+
+	int rc;
+    char tmp[PATH_MAX];
+    if (strcmp(path, "/data") == 0 && is_data_media() && is_data_media_preserved()) {
+        if (ensure_path_mounted("/data") == 0) {
+            // Preserve .layout_version to avoid "nesting bug"
+            LOGI("Preserving layout version\n");
+            unsigned char layout_buf[256];
+            ssize_t layout_buflen = -1;
+            int fd;
+            fd = open("/data/.layout_version", O_RDONLY);
+            if (fd != -1) {
+                layout_buflen = read(fd, layout_buf, sizeof(layout_buf));
+                close(fd);
+            }
+
+            rc = rmtree_except("/data", "media");
+
+            // Restore .layout_version
+            if (layout_buflen > 0) {
+                LOGI("Restoring layout version\n");
+                fd = open("/data/.layout_version", O_WRONLY | O_CREAT | O_EXCL, 0600);
+                if (fd != -1) {
+                    write(fd, layout_buf, layout_buflen);
+                    close(fd);
+                }
+            }
+        }
+        else {
+            LOGE("format_volume failed to mount /data\n");
+            return -1;
+        }
+    } else {
+        rc = rmtree_except(path, NULL);
+    }
+
+    ensure_path_unmounted(path);
+    return 0;
 }
 
 /*******************************/

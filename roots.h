@@ -35,7 +35,7 @@ int is_encrypted_data();
 
 int ensure_path_mounted(const char* path);
 int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point);
-
+int rmtree_except(const char* path, const char* except);
 // Make sure that the volume 'path' is on is mounted.  Returns 0 on
 // success (volume is unmounted);
 int ensure_path_unmounted(const char* path);
@@ -54,10 +54,17 @@ int get_num_volumes();
 
 Volume* get_device_volumes();
 
+// format device to custom fstype
+int format_device(const char *device, const char *path, const char *fs_type);
+
+// support format MTD, MMC, BML, ext2, ext3 and directory rm -rf like if a path is passed
+int format_unknown_device(const char *device, const char* path, const char *fs_type);
+
 int is_data_media();
 void setup_data_media();
 int is_data_media_volume_path(const char* path);
 void preserve_data_media(int val);
 int is_data_media_preserved();
+int setup_install_mounts();
 
 #endif  // RECOVERY_ROOTS_H_

@@ -49,11 +49,9 @@ void show_carliv_menu();
 void toggle_rainbow();
 void show_multi_flash_menu();
 
-int format_device(const char *device, const char *path, const char *fs_type);
-int format_unknown_device(const char *device, const char* path, const char *fs_type);
 void format_sdcard(const char* volume);
 int has_datadata();
-void handle_failure(int ret);
+void handle_failure();
 void process_volumes();
 int extendedcommand_file_exists();
 void show_install_update_menu();

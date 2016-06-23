@@ -18,7 +18,9 @@
 #define RECOVERY_COMMON_H
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <sys/stat.h>
+#include <stdbool.h>
 
 // Initialize the graphics system.
 void ui_init();
@@ -41,6 +43,7 @@ void ui_printlogtail(int nb_lines);
 void ui_delete_line();
 void ui_set_show_text(int value);
 int ui_get_text_cols();
+void ui_clear_text();
 
 #ifdef ENABLE_LOKI
 extern int loki_support_enabled;
@@ -157,7 +160,6 @@ typedef struct {
 
 // fopen a file, mounting volumes and making parent dirs as necessary.
 FILE* fopen_path(const char *path, const char *mode);
-void set_perf_mode(int on);
 int ui_get_selected_item();
 int ui_is_showing_back_button();
 int install_zip(const char* packagefilepath);

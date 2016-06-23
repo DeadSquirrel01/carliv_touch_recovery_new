@@ -28,7 +28,9 @@
 #define MAX_DEVICES 16
 #define MAX_MISC_FDS 16
 
+#ifndef VIBRATOR_TIMEOUT_FILE
 #define VIBRATOR_TIMEOUT_FILE	"/sys/class/timed_output/vibrator/enable"
+#endif
 
 #define BITS_PER_LONG (sizeof(unsigned long) * 8)
 #define BITS_TO_LONGS(x) (((x) + BITS_PER_LONG - 1) / BITS_PER_LONG)

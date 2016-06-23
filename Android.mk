@@ -74,7 +74,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.5
+RECOVERY_VERSION := $(RECOVERY_NAME) v5.6
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -166,6 +166,7 @@ LOCAL_STATIC_LIBRARIES := \
     libfusesideload \
     libcrypto_static \
     libminuictr \
+    libadf \
     libpixelflinger_static \
     libpng \
     libfs_mgr \

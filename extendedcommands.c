@@ -62,6 +62,9 @@
 #include "mmcutils/mmcutils.h"
 
 #include "adb_install.h"
+#include "minadbd/adb.h"
+#include "fuse_sideload.h"
+#include "fuse_sdcard_provider.h"
 
 extern struct selabel_handle *sehandle;
 
@@ -222,35 +225,6 @@ void show_power_menu() {
 	}
 }
 
-int install_zip(const char* packagefilepath) {
-    ui_print("\n-- Installing: %s\n", packagefilepath);
-    if (device_flash_type() == MTD) {
-        set_sdcard_update_bootloader_message();
-    }
-
-    int status = install_package(packagefilepath);
-    ui_reset_progress();
-    if (status != INSTALL_SUCCESS) {
-        ui_set_background(BACKGROUND_ICON_ERROR);
-        ui_print("Installation aborted.\n");
-        return 1;
-    }
-#ifdef ENABLE_LOKI
-    if (loki_support_enabled) {
-        ui_print("Checking if loki-fying is needed\n");
-        status = loki_check();
-        if (status != INSTALL_SUCCESS) {
-            ui_set_background(BACKGROUND_ICON_ERROR);
-            return 1;
-        }
-    }
-#endif
-
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
-    ui_print("\nInstall from sdcard complete.\n");
-    return 0;
-}
-
 #define ITEM_CHOOSE_ZIP       0
 #define ITEM_APPLY_SIDELOAD   1
 #define ITEM_LAST_INSTALL     2
@@ -263,6 +237,7 @@ void show_install_update_menu() {
     char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
     char* usb_path = get_usb_storage_path();
+    int wipe_cache = 0;
     
     const char* headers[] = { "Install from zip file", NULL };
     
@@ -304,7 +279,7 @@ void show_install_update_menu() {
                 show_choose_zip_menu(primary_path);
                 break;
             case ITEM_APPLY_SIDELOAD:
-                apply_from_adb();
+                enter_sideload_mode(&wipe_cache);
                 break;
             case ITEM_MULTI_ZIP:
                 show_multi_flash_menu();
@@ -999,187 +974,6 @@ static int exec_cmd(const char* path, char* const argv[]) {
     return WEXITSTATUS(status);
 }
 
-extern struct selabel_handle *sehandle;
-int format_device(const char *device, const char *path, const char *fs_type) {
-	
-    if (is_data_media_volume_path(path)) {
-        return format_unknown_device(NULL, path, NULL);
-    }
-    if (strstr(path, "/data") == path && is_data_media()) {
-        return format_unknown_device(NULL, path, NULL);
-    }
-
-    Volume* v = volume_for_path(path);
-    if (v == NULL) {
-        // silent failure for sd-ext
-        if (strcmp(path, "/sd-ext") != 0)
-            LOGE("unknown volume '%s'\n", path);
-        return -1;
-    }
-    
-    if (strcmp(fs_type, "ramdisk") == 0) {
-        // you can't format the ramdisk.
-        LOGE("can't format_volume \"%s\"", path);
-        return -1;
-    }
-
-    if (strcmp(fs_type, "rfs") == 0) {
-        if (ensure_path_unmounted(path) != 0) {
-            LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
-            return -1;
-        }
-        if (0 != format_rfs_device(device, path)) {
-            LOGE("format_volume: format_rfs_device failed on %s\n", device);
-            return -1;
-        }
-        return 0;
-    }
-
-    if (strcmp(v->mount_point, path) != 0) {
-        return format_unknown_device(v->device, path, NULL);
-    }
-
-    if (ensure_path_unmounted(path) != 0) {
-        LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
-        return -1;
-    }
-
-    if (strcmp(fs_type, "yaffs2") == 0 || strcmp(fs_type, "mtd") == 0) {
-        mtd_scan_partitions();
-        const MtdPartition* partition = mtd_find_partition_by_name(device);
-        if (partition == NULL) {
-            LOGE("format_volume: no MTD partition \"%s\"\n", device);
-            return -1;
-        }
-
-        MtdWriteContext *write = mtd_write_partition(partition);
-        if (write == NULL) {
-            LOGW("format_volume: can't open MTD \"%s\"\n", device);
-            return -1;
-        } else if (mtd_erase_blocks(write, -1) == (off_t) - 1) {
-            LOGW("format_volume: can't erase MTD \"%s\"\n", device);
-            mtd_write_close(write);
-            return -1;
-        } else if (mtd_write_close(write)) {
-            LOGW("format_volume: can't close MTD \"%s\"\n", device);
-            return -1;
-        }
-        return 0;
-    }
-    
-	int result;
-	ssize_t length = 0;
-	if (v->length != 0) length = v->length;
-    if (strcmp(fs_type, "ext4") == 0) {
-        result = make_ext4fs(device, length, v->mount_point, sehandle);
-        if (result != 0) {
-            LOGE("format_volume: make_ext4fs failed on %s\n", device);
-            return -1;
-        }
-        return 0;
-    }
-#ifdef USE_F2FS
-    if (strcmp(v->fs_type, "f2fs") == 0) {
-        if (length < 0) {
-			LOGE("format_volume: negative length (%zd) not supported on %s\n", length, v->fs_type);
-			return -1;
-		}
-		char *num_sectors;
-		if (asprintf(&num_sectors, "%zd", length / 512) <= 0) {
-			LOGE("format_volume: failed to create %s command for %s\n", v->fs_type, v->device);
-			return -1;
-		}
-		const char *f2fs_path = "/sbin/mkfs.f2fs";
-		const char* const f2fs_argv[] = {"mkfs.f2fs", "-t", "-d1", v->device, num_sectors, NULL};
-
-		result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
-		free(num_sectors);
-        if (result != 0) {
-            LOGE("format_volume: make f2fs failed on %s\n", v->device);
-            return -1;
-        }
-        return 0;
-    }
-#endif
-    return format_unknown_device(device, path, fs_type);
-}
-
-int format_unknown_device(const char *device, const char* path, const char *fs_type) {
-    LOGI("Formatting unknown device.\n");
-
-    if (fs_type != NULL && get_flash_type(fs_type) != UNSUPPORTED)
-        return erase_raw_partition(fs_type, device);
-
-    // if this is SDEXT:, don't worry about it if it does not exist.
-    if (0 == strcmp(path, "/sd-ext")) {
-        struct stat st;
-        Volume *vol = volume_for_path("/sd-ext");
-        if (vol == NULL || 0 != stat(vol->device, &st)) {
-            LOGI("No app2sd partition found. Skipping format of /sd-ext.\n");
-            return 0;
-        }
-    }
-
-    if (NULL != fs_type) {
-        if (strcmp("ext3", fs_type) == 0) {
-            LOGI("Formatting ext3 device.\n");
-            if (0 != ensure_path_unmounted(path)) {
-                LOGE("Error while unmounting %s.\n", path);
-                return -12;
-            }
-            return format_ext3_device(device);
-        }
-
-        if (strcmp("ext2", fs_type) == 0) {
-            LOGI("Formatting ext2 device.\n");
-            if (0 != ensure_path_unmounted(path)) {
-                LOGE("Error while unmounting %s.\n", path);
-                return -12;
-            }
-            return format_ext2_device(device);
-        }
-    }
-
-    if (0 != ensure_path_mounted(path)) {
-        ui_print("Error mounting %s!\n", path);
-        ui_print("Skipping format...\n");
-        return -1;
-    }
-
-    char tmp[PATH_MAX];
-    if (strcmp(path, "/data") == 0) {
-        sprintf(tmp, "cd /data ; for f in $(ls -A | grep -v ^media$); do rm -rf $f; done");
-        __system(tmp);
-        sprintf(tmp, "cd /data ; for f in $(ls -A | grep -v ^media$); do chattr -R -i $f; rm -rf $f; done");
-        __system(tmp);
-        // if the /data/media sdcard has already been migrated for android 4.2,
-        // prevent the migration from happening again by writing the .layout_version
-        struct stat st;
-        if (0 == lstat("/data/media/0", &st)) {
-            char* layout_version = "2";
-            FILE* f = fopen("/data/.layout_version", "wb");
-            if (NULL != f) {
-                fwrite(layout_version, 1, 2, f);
-                fclose(f);
-            } else {
-                LOGI("error opening /data/.layout_version for write.\n");
-            }
-        } else {
-            LOGI("/data/media/0 not found. migration may occur.\n");
-        }
-    } else {
-        sprintf(tmp, "chattr -R -i %s", path);
-        __system(tmp);
-        sprintf(tmp, "rm -rf %s/*", path);
-        __system(tmp);
-        sprintf(tmp, "rm -rf %s/.*", path);
-        __system(tmp);
-    }
-
-    ensure_path_unmounted(path);
-    return 0;
-}
-
 typedef struct {
     char mount[256];
     char unmount[256];
@@ -1767,12 +1561,16 @@ static void show_mtk_delete_menu(const char* path) {
 static void show_mtk_special_backup_restore_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
+    char* usb_path = get_usb_storage_path();
 
     const char* headers[] = { "MTK Partitions Backup/Restore", NULL };
 
     char* list[] = { "MTK Backup to SDcard",
                      "MTK Restore from SDcard",
                      "Delete a mtk backup from SDcard",                     
+                      NULL,
+                      NULL,
+                      NULL,
                       NULL,
                       NULL,
                       NULL,
@@ -1784,6 +1582,11 @@ static void show_mtk_special_backup_restore_menu() {
         list[4] = "MTK Restore from ExtraSD";
         list[5] = "Delete a mtk backup from ExtraSD";
     }
+    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+		list[6] = "MTK Backup to USB-Drive";
+        list[7] = "MTK Restore from USB-Drive";
+        list[8] = "Delete a mtk backup from USB-Drive";
+	}
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
@@ -1808,6 +1611,15 @@ static void show_mtk_special_backup_restore_menu() {
                 break;
             case 5:
                 show_mtk_delete_menu(extra_path);
+                break;
+            case 6:
+                show_mtk_advanced_backup_menu(usb_path);
+                break;
+            case 7:
+                show_mtk_advanced_restore_menu(usb_path);
+                break;
+            case 8:
+                show_mtk_delete_menu(usb_path);
                 break;    
           }
     }
@@ -1853,11 +1665,14 @@ static void choose_default_backup_format() {
 static void show_nandroid_advanced_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
+    char* usb_path = get_usb_storage_path();
 
     const char* headers[] = { "Advanced Backup and Restore", NULL };
 
     char* list[] = { "Advanced Backup to SDcard",
                      "Advanced Restore from SDcard",
+                      NULL,
+                      NULL,
                       NULL,
                       NULL,
                       NULL
@@ -1867,6 +1682,10 @@ static void show_nandroid_advanced_menu() {
         list[2] = "Advanced backup to ExtraSD";
         list[3] = "Advanced restore from ExtraSD";
     }
+    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+		list[4] = "Advanced backup to USB-Drive";
+		list[5] = "Advanced restore from USB-Drive";
+	}
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
@@ -1888,6 +1707,16 @@ static void show_nandroid_advanced_menu() {
             case 3:
                 if (extra_path != NULL) {
                     show_nandroid_advanced_restore_menu(extra_path);
+                }
+                break;
+            case 4:
+                if (usb_path != NULL) {
+					show_nandroid_advanced_backup_menu(usb_path);
+                }
+                break;
+            case 5:
+                if (usb_path != NULL) {
+                    show_nandroid_advanced_restore_menu(usb_path);
                 }
                 break;
             default:
@@ -1929,6 +1758,7 @@ static int hide_nandroid_progress() {
 void show_nandroid_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
+    char* usb_path = get_usb_storage_path();
     
     const char* headers[] = { "Backup and Restore", NULL };
 
@@ -1942,6 +1772,9 @@ void show_nandroid_menu() {
 					NULL,
 					NULL,
 					NULL,
+					NULL,
+					NULL,
+					NULL,
 					NULL
     };
 
@@ -1950,8 +1783,13 @@ void show_nandroid_menu() {
 		list[8] = "RESTORE from ExtraSD";
 		list[9] = "DELETE Backup from ExtraSD";
 	}
+	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+		list[10] = "BACKUP to USB-Drive";
+		list[11] = "RESTORE from USB-Drive";
+		list[12] = "DELETE Backup from USB-Drive";
+	}
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
-    extend_nandroid_menu(list, 10, sizeof(list) / sizeof(char*));
+    extend_nandroid_menu(list, 13, sizeof(list) / sizeof(char*));
 #endif
 
     for (;;) {
@@ -2021,11 +1859,38 @@ void show_nandroid_menu() {
                 if (extra_path != NULL) {
                     show_nandroid_delete_menu(extra_path);
                 }
+                break;           
+            case 10:
+                if (usb_path != NULL) {
+                    char backup_path[PATH_MAX];
+                    time_t t = time(NULL);
+                    struct tm *tmp = localtime(&t);
+                    if (tmp == NULL) {
+                        struct timeval tp;
+                        gettimeofday(&tp, NULL);
+                        snprintf(backup_path, PATH_MAX, "%s/clockworkmod/backup/CTR-%ld", usb_path, tp.tv_sec);
+                    } else {
+                        char path_fmt[PATH_MAX];
+                        strftime(path_fmt, PATH_MAX, "%F-%H-%M-%S", tmp);
+                        snprintf(backup_path, PATH_MAX, "%s/clockworkmod/backup/CTR-%s", usb_path, path_fmt);
+                    }
+                    nandroid_backup(backup_path);
+                }
+                break;
+            case 11:
+                if (usb_path != NULL) {
+                    show_nandroid_restore_menu(usb_path);
+                }
+                break;
+            case 12:
+                if (usb_path != NULL) {
+                    show_nandroid_delete_menu(usb_path);
+                }
                 break;   
                     
             default:
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
-                handle_nandroid_menu(10, chosen_item);
+                handle_nandroid_menu(13, chosen_item);
 #endif
                 break;
         }
@@ -2501,9 +2366,10 @@ void show_carliv_menu() {
 				break;  
              case 2:
 				ui_set_log_stdout(0);
+				ui_clear_text();
 				ui_set_background(BACKGROUND_ICON_NONE);
 				ui_print(EXPAND(RECOVERY_VERSION)" ** Android "EXPAND(RECOVERY_BUILD_OS)"\n");
-			    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
+			    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n\n");
                 ui_print("Based on Clockworkmod recovery.\n");
                 ui_print("This is a Recovery made by carliv from xda with Clockworkmod base and many improvements inspired from TWRP, PhilZ  or created by carliv.\n");
                 ui_print("With full touch support module developed by PhilZ for PhilZ Touch Recovery, ported here by carliv.\n");
@@ -2514,6 +2380,7 @@ void show_carliv_menu() {
 				ui_print("Return to menu with any key.\n");
 				ui_wait_key();
                 ui_clear_key_queue();
+                ui_clear_text();
                 ui_set_background(BACKGROUND_ICON_CLOCKWORK);
                 ui_set_log_stdout(1);
                 break;                  
@@ -2541,18 +2408,19 @@ void show_advanced_menu() {
     static char* list[] = { "Report Error",
                             "Key Test",
                             "Show log",
+                            "Clear Screen",
                             NULL,
                             NULL,
                             NULL
     };
     
     if (can_partition(primary_path)) {
-        list[3] = "Partition SDcard";
+        list[4] = "Partition SDcard";
     } else if (can_partition(extra_path)) {
-        list[3] = "Partition ExtraSD";
+        list[4] = "Partition ExtraSD";
     }
 #ifdef ENABLE_LOKI
-		list[4] = "Toggle loki support";
+		list[5] = "Toggle loki support";
 #endif
 
     for (;;)
@@ -2563,7 +2431,7 @@ void show_advanced_menu() {
         switch (chosen_item)
         {
             case 0:
-                handle_failure(1);
+                handle_failure();
                 break;
             case 1:
             {
@@ -2585,7 +2453,11 @@ void show_advanced_menu() {
                 ui_clear_key_queue();
                 ui_set_background(BACKGROUND_ICON_CLOCKWORK);
                 break;
-            case 3:
+			case 3:
+                ui_clear_text();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+                break;
+            case 4:
             {
 				if (can_partition(primary_path)) {
 			        partition_sdcard(primary_path);
@@ -2593,9 +2465,9 @@ void show_advanced_menu() {
 			        partition_sdcard(extra_path);
 			    }
                 break;
-			}
+			}			
 #ifdef ENABLE_LOKI
-            case 4:
+            case 5:
                 toggle_loki_support();
                 break;
 #endif		           
@@ -2685,9 +2557,7 @@ void process_volumes() {
     return;
 }
 
-void handle_failure(int ret) {
-    if (ret == 0)
-        return;
+void handle_failure() {
     if (0 != ensure_path_mounted(get_primary_storage_path()))
         return;
     mkdir("/sdcard/clockworkmod", S_IRWXU | S_IRWXG | S_IRWXO);
@@ -2734,17 +2604,23 @@ int verify_root_and_recovery() {
 
     ui_set_background(BACKGROUND_ICON_CLOCKWORK);
     int ret = 0;
-    struct stat root;
+    struct stat st;
+    if (0 == lstat("/system/recovery-from-boot.p", &st)) {
+        ui_show_text(1);        
+        if (confirm_selection("ROM may flash stock recovery on boot. Fix?", "Yes")) {
+            __system("rm -rf /system/recovery-from-boot.p");
+            ret = 1;
+        }
+    }
 
-    if (lstat("/system/etc/.installed_su_daemon", &root) != 0) {
-	    if (lstat("/system/recovery-from-boot.p", &root) == 0) {
-			if (root.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) {
+    if (0 != lstat("/system/etc/.installed_su_daemon", &st)) {
+        if (0 == lstat("/system/etc/install-recovery.sh", &st)) {
+            if (st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) {
 		        ui_show_text(1);		        
-		        if (confirm_selection("ROM may flash stock recovery. Fix?", "Yes - Disable recovery flash")) {
-		            __system("rm -f /system/recovery-from-boot.p");
-		            __system("chmod -x /system/etc/install-recovery.sh");
-		            ret = 1;
-				}
+		        if (confirm_selection("ROM may flash stock recovery on boot. Fix?", "Yes - Disable recovery flash")) {
+                    __system("chmod -x /system/etc/install-recovery.sh");
+                    ret = 1;
+                }
 	        }
 	    }
 	}

@@ -1,9 +1,8 @@
-__<center><big>**Carliv Touch Recovery**</big></center>__
+<p align="center"><big><b>Carliv Touch Recovery</b></big></p>
 
-__Home page__
-http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290
+[**Home page**](http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290)
 
-- version 5.5 is for Lollipop (cm 12.1 or aicp lp-5.1).
+- version 5.6 is for Lollipop (cm 12.1 or aicp lp-5.1).
 The version starting number is related to android version.
 
 This is a CWM based recovery and I did put up some work to update it to lollipop (cm 12.1) after official cwm development stopped at kitkat. It works with *LOLLIPOP* kernels and it builds with cm 12.1 or aicp lp-5.1. 
