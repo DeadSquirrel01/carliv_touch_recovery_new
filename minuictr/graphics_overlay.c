@@ -53,7 +53,6 @@ static GRSurface* gr_draw = NULL;
 static int displayed_buffer;
 
 static struct fb_var_screeninfo vi;
-static struct fb_fix_screeninfo fi;
 static int fb_fd = -1;
 static bool isMDP5 = false;
 static int leftSplit = 0;
@@ -125,6 +124,7 @@ bool target_has_overlay(char *version)
 
 minui_backend* open_overlay() {
     int fd;
+    struct fb_fix_screeninfo fi;
 
     fd = open("/dev/graphics/fb0", O_RDWR);
     if (fd < 0) {
@@ -549,7 +549,7 @@ static GRSurface* overlay_init(struct minui_backend* backend) {
         return NULL;
     }
 
-    fb_fix_screeninfo fi;
+    struct fb_fix_screeninfo fi;
     if (ioctl(fd, FBIOGET_FSCREENINFO, &fi) < 0) {
         perror("failed to get fb0 info");
         close(fd);
