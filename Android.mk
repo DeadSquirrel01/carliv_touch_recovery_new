@@ -259,7 +259,7 @@ LOCAL_ADDITIONAL_DEPENDENCIES += \
     parted \
     sdparted    
 
-ifeq ($(filter true, $(TARGET_USERIMAGES_USE_F2FS) $(TARGET_USES_NTFS)),)
+ifneq (,$(filter $(TARGET_USERIMAGES_USE_F2FS) $(TARGET_USES_NTFS), true))
 LOCAL_ADDITIONAL_DEPENDENCIES += ctrfs
 endif
 

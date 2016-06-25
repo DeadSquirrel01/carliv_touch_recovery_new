@@ -15,6 +15,7 @@ LOCAL_FORCE_STATIC_EXECUTABLE := true
 
 include $(BUILD_EXECUTABLE)
 
+ifneq (,$(filter $(TARGET_USERIMAGES_USE_F2FS) $(TARGET_USES_NTFS), true))
 include $(CLEAR_VARS)
 LOCAL_MODULE := ctrfs
 LOCAL_MODULE_TAGS := eng optional
@@ -75,3 +76,5 @@ $(RECOVERY_FSTOOLS_SYMLINKS):
 	@mkdir -p $(dir $@)
 	@rm -rf $@
 	$(hide) ln -sf $(FSTOOLS_BINARY) $@ 
+
+endif
