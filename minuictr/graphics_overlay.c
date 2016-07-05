@@ -43,10 +43,10 @@
 #define MDP_V4_0 400
 #define MAX_DISPLAY_DIM  2048
 
-static GRSurface* overlay_init(struct minui_backend*);
-static GRSurface* overlay_flip(struct minui_backend*);
-static void overlay_blank(struct minui_backend*, bool);
-static void overlay_exit(struct minui_backend*);
+static GRSurface* overlay_init(minui_backend*);
+static GRSurface* overlay_flip(minui_backend*);
+static void overlay_blank(minui_backend*, bool);
+static void overlay_exit(minui_backend*);
 
 static GRSurface gr_framebuffer;
 static GRSurface* gr_draw = NULL;
@@ -100,7 +100,6 @@ static minui_backend my_backend = {
 
 bool target_has_overlay(char *version)
 {
-    int ret;
     int mdp_version;
     bool overlay_supported = false;
 
@@ -150,7 +149,7 @@ minui_backend* open_overlay() {
     return NULL;
 }
 
-static void overlay_blank(struct minui_backend* backend __unused, bool blank)
+static void overlay_blank(minui_backend* backend __unused, bool blank)
 {
 #ifdef RECOVERY_LCD_BACKLIGHT_PATH
     int fd;
@@ -476,7 +475,7 @@ int overlay_display_frame(int fd, void* data, size_t size)
     return ret;
 }
 
-static GRSurface* overlay_flip(struct minui_backend* backend __unused) {
+static GRSurface* overlay_flip(minui_backend* backend __unused) {
 #if defined(RECOVERY_BGRA)
     // In case of BGRA, do some byte swapping
     unsigned int idx;
@@ -542,9 +541,9 @@ int free_overlay(int fd)
     return 0;
 }
 
-static GRSurface* overlay_init(struct minui_backend* backend) {
+static GRSurface* overlay_init(minui_backend* backend) {
     int fd = open("/dev/graphics/fb0", O_RDWR);
-    if (fd == -1) {
+    if (fd < 0) {
         perror("cannot open fb0");
         return NULL;
     }
@@ -632,7 +631,7 @@ static GRSurface* overlay_init(struct minui_backend* backend) {
     return gr_draw;
 }
 
-static void overlay_exit(struct minui_backend* backend __unused) {
+static void overlay_exit(minui_backend* backend __unused) {
     free_overlay(fb_fd);
     free_ion_mem();
 
@@ -646,15 +645,15 @@ static void overlay_exit(struct minui_backend* backend __unused) {
     gr_draw = NULL;
 }
 #else // MSM_BSP
-static GRSurface* overlay_flip(struct minui_backend* backend __unused) {
+static GRSurface* overlay_flip(minui_backend* backend __unused) {
     return NULL;
 }
 
-static GRSurface* overlay_init(struct minui_backend* backend __unused) {
+static GRSurface* overlay_init(minui_backend* backend __unused) {
     return NULL;
 }
 
-static void overlay_exit(struct minui_backend* backend __unused) {
+static void overlay_exit(minui_backend* backend __unused) {
     return;
 }
 #endif // MSM_BSP

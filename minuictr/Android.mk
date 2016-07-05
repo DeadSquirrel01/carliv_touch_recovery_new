@@ -22,14 +22,13 @@ ifeq ($(TARGET_USES_QCOM_BSP), true)
     endif
   endif
 else
-  LOCAL_C_INCLUDES += $(commands_recovery_local_path)/minuictr/include
-    LOCAL_CFLAGS += -DHAS_ADF
-    LOCAL_SRC_FILES += graphics_adf.c
-    LOCAL_WHOLE_STATIC_LIBRARIES += libadf
-    LOCAL_C_INCLUDES += system/core/adf/libadf/include
+	LOCAL_C_INCLUDES += $(commands_recovery_local_path)/minuictr/include
+	LOCAL_CFLAGS += -DHAS_ADF
+	LOCAL_SRC_FILES += graphics_adf.c
+	LOCAL_WHOLE_STATIC_LIBRARIES += libadf
+	LOCAL_C_INCLUDES += system/core/adf/libadf/include
 endif
 
-LOCAL_CFLAGS += -DHAS_DRM
 LOCAL_SRC_FILES += graphics_drm.c
 LOCAL_WHOLE_STATIC_LIBRARIES += libdrm
 LOCAL_C_INCLUDES += external/libdrm external/libdrm/include/drm
@@ -63,6 +62,10 @@ ifeq ($(subst ",,$(TARGET_RECOVERY_PIXEL_FORMAT)),RGBX_8888)
 endif
 ifeq ($(subst ",,$(TARGET_RECOVERY_PIXEL_FORMAT)),BGRA_8888)
   LOCAL_CFLAGS += -DRECOVERY_BGRA
+endif
+
+ifeq ($(RECOVERY_GRAPHICS_FORCE_USE_LINELENGTH), true)
+LOCAL_CFLAGS += -DRECOVERY_GRAPHICS_FORCE_USE_LINELENGTH
 endif
 
 ifneq ($(TARGET_RECOVERY_OVERSCAN_PERCENT),)

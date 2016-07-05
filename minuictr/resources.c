@@ -37,7 +37,8 @@
 #define SURFACE_DATA_ALIGNMENT 8
 
 static GGLSurface* malloc_surface(size_t data_size) {
-    unsigned char* temp = malloc(sizeof(GGLSurface) + data_size + SURFACE_DATA_ALIGNMENT);
+    size_t size = sizeof(GGLSurface) + data_size + SURFACE_DATA_ALIGNMENT;
+    unsigned char* temp = malloc(size);
     if (temp == NULL) return NULL;
     GGLSurface* surface = (GGLSurface*) temp;
     surface->data = temp + sizeof(GGLSurface) +
@@ -198,7 +199,7 @@ static void transform_rgb_to_draw(unsigned char* input_row,
     }
 }
 
-int res_create_surface(const char* name, gr_surface* pSurface) {
+int res_create_display_surface(const char* name, gr_surface* pSurface) {
     GGLSurface* surface = NULL;
     int result = 0;
     png_structp png_ptr = NULL;
@@ -216,6 +217,10 @@ int res_create_surface(const char* name, gr_surface* pSurface) {
         result = -8;
         goto exit;
     }
+
+#if defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
+    png_set_bgr(png_ptr);
+#endif
 
     unsigned char* p_row = malloc(width * 4);
     unsigned int y;
@@ -284,6 +289,10 @@ int res_create_multi_display_surface(const char* name, int* frames, gr_surface**
             goto exit;
         }
     }
+
+#if defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
+    png_set_bgr(png_ptr);
+#endif
 
     unsigned char* p_row = malloc(width * 4);
     unsigned int y;

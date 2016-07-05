@@ -392,7 +392,7 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
             return 0;
         return result;
     } else {
-        // let's try mounting with the mount binary and hope for the best.
+        ui_set_log_stdout(0);
         char mount_cmd[PATH_MAX];
         if (strcmp(v->mount_point, mount_point) != 0)
             sprintf(mount_cmd, "mount %s %s", v->device, mount_point);
@@ -402,7 +402,6 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
 		if ((result = __system(mount_cmd)) != 0) {
             if (strcmp(v->fs_type, "auto") == 0) {
                 struct stat s;
-                ui_set_log_stdout(0);
                 if (stat("/sbin/exfat-fuse", &s) == 0) {
                     sprintf(mount_cmd, "/sbin/exfat-fuse -o big_writes,default_permissions,max_read=131072,max_write=131072 %s %s", v->device, mount_point);
                     result = __system(mount_cmd);
@@ -411,10 +410,10 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
 					const char *ntfs_path = "/sbin/mount.ntfs";
 					const char* const ntfs_argv[] = {"mount.ntfs", "-o umask=0", v->device, mount_point, NULL};
 					result = exec_cmd(ntfs_path, (char* const*)ntfs_argv);
-                }
-                ui_set_log_stdout(1);               
+                }               
             }
         }
+        ui_set_log_stdout(1);
         return result;
     }
 

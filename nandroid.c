@@ -65,6 +65,60 @@ typedef int (*nandroid_restore_handler)(const char* backup_file_image, const cha
 static int nandroid_backup_bitfield = 0;
 static unsigned int nandroid_files_total = 0;
 static unsigned int nandroid_files_count = 0;
+static int nandroid_canceled = 0;
+
+// time using gettimeofday()
+// to get time in usec, we call timenow_usec() which will link here if clock_gettime fails
+static long long gettime_usec() {
+    struct timeval now;
+    long long useconds;
+    gettimeofday(&now, NULL);
+    useconds = (long long)(now.tv_sec) * 1000000LL;
+    useconds += (long long)now.tv_usec;
+    return useconds;
+}
+
+// use clock_gettime for elapsed time
+// this is nsec precise + less prone to issues for elapsed time
+// unsigned integers cannot be negative (overflow): set error return code to 0 (1.1.1970 00:00)
+static unsigned long long gettime_nsec() {
+    struct timespec ts;
+    static int err = 0;
+
+    if (err) return 0;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0) {
+        LOGI("clock_gettime(CLOCK_MONOTONIC) failed: %s\n", strerror(errno));
+        ++err;
+        return 0;
+    }
+
+    unsigned long long nseconds = (unsigned long long)(ts.tv_sec) * 1000000000ULL;
+    nseconds += (unsigned long long)(ts.tv_nsec);
+    return nseconds;
+}
+
+static long long timenow_msec() {
+    // first try using clock_gettime
+    unsigned long long nseconds;
+    nseconds = gettime_nsec();
+    if (nseconds == 0) {
+        // LOGI("dropping to gettimeofday()\n");
+        return (gettime_usec() / 1000LL);
+    }
+
+    return (long long)(nseconds / 1000000ULL);
+}
+
+static long long interval_passed_t_timer = 0;
+int is_time_interval_passed(long long msec_interval) {
+    long long t = timenow_msec();
+    if (msec_interval != 0 && t - interval_passed_t_timer < msec_interval)
+        return 0;
+
+    interval_passed_t_timer = t;
+    return 1;
+}
 
 void nandroid_generate_timestamp_path(char* backup_path) {
 	time_t t = time(NULL);
@@ -88,7 +142,12 @@ static void ensure_directory(const char* dir) {
 
 static int print_and_error(const char* message, int ret) {
     ui_reset_progress();
-    ui_set_background(BACKGROUND_ICON_ERROR);
+    if (nandroid_canceled) {
+		ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+		nandroid_canceled = 0;
+	} else {
+		ui_set_background(BACKGROUND_ICON_ERROR);
+	}
     if (message != NULL)
         LOGE("%s", message); // Assumes message has line termination
 
@@ -100,6 +159,7 @@ static void nandroid_callback(const char* filename) {
         return;
 
     char tmp[PATH_MAX];
+    ui_set_log_stdout(0);
     strcpy(tmp, filename);
     if (tmp[strlen(tmp) - 1] == '\n')
         tmp[strlen(tmp) - 1] = '\0';
@@ -111,6 +171,7 @@ static void nandroid_callback(const char* filename) {
                                          (double)nandroid_files_total);
         ui_set_progress(progress_decimal);
     }
+    ui_set_log_stdout(1);
 }
 
 static void compute_directory_stats(const char* directory) {
@@ -143,6 +204,67 @@ static void compute_directory_stats(const char* directory) {
     ui_show_progress(1, 0);
 }
 
+void finish_nandroid_job() {
+    ui_print("Finalizing, please wait...\n");
+    sync();
+        ui_set_background(BACKGROUND_ICON_NONE);
+
+    ui_reset_progress();
+}
+
+int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup, int *nand_starts) {
+    if (!is_ui_initialized())
+        return 0;
+
+    if (*nand_starts) {
+        ui_clear_key_queue();
+        ui_print("\nPress Power to cancel.\n \n \n");
+        *nand_starts = 0;
+    }
+
+    int key_event = key_press_event();
+    if (key_event != NO_ACTION) {
+
+        // support cancel nandroid job
+        if (key_event == SELECT_ITEM) {
+            ui_print("\nReally cancel? (press Power)\n");
+            is_time_interval_passed(0);
+            ui_clear_key_queue();
+            while (!is_time_interval_passed(5000)) {
+                key_event = key_press_event();
+                if (key_event != NO_ACTION)
+                    break;
+                continue;
+            }
+
+            if (key_event != SELECT_ITEM) {
+                return 0;
+            }
+
+            ui_print("Cancelling, please wait...\n");
+            ui_clear_key_queue();
+            __pclose(*fp);
+            nandroid_canceled = 1;
+            if (is_backup) {
+                char cmd[PATH_MAX];
+                ui_print("Deleting backup...\n");
+                sync(); // before deleting backup folder
+                sprintf(cmd, "rm -rf '%s'", dirname(backup_file_image));
+                __system(cmd);
+            }
+
+            finish_nandroid_job();
+            if (!is_backup) {
+                ui_print("\nPartition was left corrupted after cancel command!\n");
+            }
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static int mkyaffs2image_wrapper(const char* backup_path, const char* backup_file_image, int callback) {
     char tmp[PATH_MAX];
     sprintf(tmp, "cd %s ; mkyaffs2image . %s.img ; exit $?", backup_path, backup_file_image);
@@ -153,7 +275,10 @@ static int mkyaffs2image_wrapper(const char* backup_path, const char* backup_fil
         return -1;
     }
 
+	int nand_starts = 1;
     while (fgets(tmp, PATH_MAX, fp) != NULL) {
+		if (user_cancel_nandroid(&fp, backup_file_image, 1, &nand_starts))
+            return -1;
         tmp[PATH_MAX - 1] = '\0';
         if (callback)
             nandroid_callback(tmp);
@@ -173,7 +298,12 @@ static int do_tar_compress(char* command, int callback, const char* backup_file_
         return -1;
     }
 
+	int nand_starts = 1;
     while (fgets(buf, PATH_MAX, fp) != NULL) {
+		if (user_cancel_nandroid(&fp, backup_file_image, 1, &nand_starts)) {
+            set_perf_mode(0);
+            return -1;
+        }
         buf[PATH_MAX - 1] = '\0';
         if (callback)
             nandroid_callback(buf);
@@ -382,7 +512,7 @@ int nandroid_backup(const char* backup_path) {
         uint64_t bsize = sfs.f_bsize;
         uint64_t sdcard_free = bavail * bsize;
         uint64_t sdcard_free_mb = sdcard_free / (uint64_t)(1024 * 1024);
-        ui_print("SD Card space free: %"PRIu64"MB\n", sdcard_free_mb);
+        ui_print("SD Card space free: %"PRIu64" MB\n", sdcard_free_mb);
         if (sdcard_free_mb < 150)
             ui_print("There may not be enough free space to complete backup... continuing...\n");
     }
@@ -411,6 +541,11 @@ int nandroid_backup(const char* backup_path) {
         
 	if (volume_for_path("/custpack") != NULL) {
 	    if (0 != (ret = nandroid_backup_partition(backup_path, "/custpack")))
+	        return print_and_error(NULL, ret);
+	}
+	
+	if (volume_for_path("/cust") != NULL) {
+	    if (0 != (ret = nandroid_backup_partition(backup_path, "/cust")))
 	        return print_and_error(NULL, ret);
 	}
 
@@ -462,8 +597,7 @@ int nandroid_backup(const char* backup_path) {
     sprintf(tmp, "chmod -R 777 %s ; chmod -R u+r,u+w,g+r,g+w,o+r,o+w %s ; chmod u+x,g+x,o+x %s/backup", backup_path, base_dir, base_dir);
     __system(tmp);
 
-    sync();
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    finish_nandroid_job();
     ui_reset_progress();
     ui_print("\nBackup complete!\n");
     return 0;
@@ -498,7 +632,7 @@ int nandroid_advanced_backup(const char* backup_path, int boot, int system, int 
         uint64_t bsize = sfs.f_bsize;
         uint64_t sdcard_free = bavail * bsize;
         uint64_t sdcard_free_mb = sdcard_free / (uint64_t)(1024 * 1024);
-        ui_print("SD Card space free: %"PRIu64"MB\n", sdcard_free_mb);
+        ui_print("SD Card space free: %"PRIu64" MB\n", sdcard_free_mb);
         if (sdcard_free_mb < 150)
             ui_print("There may not be enough free space to complete backup... continuing...\n");
     }
@@ -514,6 +648,11 @@ int nandroid_advanced_backup(const char* backup_path, int boot, int system, int 
         
 	if (volume_for_path("/custpack") != NULL) {
 	    if (system && 0 != (ret = nandroid_backup_partition(backup_path, "/custpack")))
+        return print_and_error(NULL, ret);
+	}
+	
+	if (volume_for_path("/cust") != NULL) {
+	    if (system && 0 != (ret = nandroid_backup_partition(backup_path, "/cust")))
         return print_and_error(NULL, ret);
 	}
 
@@ -538,8 +677,7 @@ int nandroid_advanced_backup(const char* backup_path, int boot, int system, int 
         return ret;
     }
 
-    sync();
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    finish_nandroid_job();
     ui_reset_progress();
     ui_print("\nBackup complete!\n");
     return 0;
@@ -576,7 +714,7 @@ int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram,
         uint64_t bsize = sfs.f_bsize;
         uint64_t sdcard_free = bavail * bsize;
         uint64_t sdcard_free_mb = sdcard_free / (uint64_t)(1024 * 1024);
-        ui_print("SD Card space free: %"PRIu64"MB\n", sdcard_free_mb);
+        ui_print("SD Card space free: %"PRIu64" MB\n", sdcard_free_mb);
         if (sdcard_free_mb < 150)
             ui_print("There may not be enough free space to complete backup... continuing...\n");
     }
@@ -620,8 +758,7 @@ int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram,
         return ret;
     }
 
-    sync();
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    finish_nandroid_job();
     ui_reset_progress();
     ui_print("\nBackup complete!\n");
     return 0;
@@ -666,6 +803,10 @@ static int nandroid_dump(const char* partition) {
         return nandroid_backup_partition("-", "/custpack");
     }
 
+    if (strcmp(partition, "cust") == 0) {
+        return nandroid_backup_partition("-", "/cust");
+    }
+
     return 1;
 }
 
@@ -678,7 +819,10 @@ static int unyaffs_wrapper(const char* backup_file_image, const char* backup_pat
         return -1;
     }
 
+	int nand_starts = 1;
     while (fgets(tmp, PATH_MAX, fp) != NULL) {
+		if (user_cancel_nandroid(&fp, NULL, 0, &nand_starts))
+            return -1;
         tmp[PATH_MAX - 1] = '\0';
         if (callback)
             nandroid_callback(tmp);
@@ -698,7 +842,12 @@ static int do_tar_extract(char* command, const char* backup_file_image, const ch
         return -1;
     }
 
+	int nand_starts = 1;
     while (fgets(buf, PATH_MAX, fp) != NULL) {
+		if (user_cancel_nandroid(&fp, NULL, 0, &nand_starts)) {
+            set_perf_mode(0);
+            return -1;
+        }
         buf[PATH_MAX - 1] = '\0';
         if (callback)
             nandroid_callback(buf);
@@ -971,6 +1120,11 @@ int nandroid_restore(const char* backup_path, int restore_boot, int restore_syst
 	    if (restore_system && 0 != (ret = nandroid_restore_partition(backup_path, "/custpack")))
         return print_and_error(NULL, ret);
 	}
+	
+	if (volume_for_path("/cust") != NULL) {
+	    if (restore_system && 0 != (ret = nandroid_restore_partition(backup_path, "/cust")))
+        return print_and_error(NULL, ret);
+	}
 
     if (restore_data && 0 != (ret = nandroid_restore_partition(backup_path, "/data")))
         return print_and_error(NULL, ret);
@@ -989,8 +1143,7 @@ int nandroid_restore(const char* backup_path, int restore_boot, int restore_syst
     if (restore_sdext && 0 != (ret = nandroid_restore_partition(backup_path, "/sd-ext")))
         return print_and_error(NULL, ret);
 
-    sync();
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    finish_nandroid_job();
     ui_reset_progress();
     ui_print("\nRestore complete!\n");
     return 0;
@@ -1036,6 +1189,11 @@ int nandroid_advanced_restore(const char* backup_path, int boot, int system, int
 	    if (system && 0 != (ret = nandroid_restore_partition(backup_path, "/custpack")))
         return print_and_error(NULL, ret);
 	}
+	
+	if (volume_for_path("/cust") != NULL) {
+	    if (system && 0 != (ret = nandroid_restore_partition(backup_path, "/cust")))
+        return print_and_error(NULL, ret);
+	}
 
     if (data && 0 != (ret = nandroid_restore_partition(backup_path, "/data")))
         return print_and_error(NULL, ret);
@@ -1051,8 +1209,7 @@ int nandroid_advanced_restore(const char* backup_path, int boot, int system, int
     if (cache && 0 != (ret = nandroid_restore_partition_extended(backup_path, "/cache", 0)))
         return print_and_error(NULL, ret);
 
-    sync();
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    finish_nandroid_job();
     ui_reset_progress();
     ui_print("\nRestore complete!\n");
     return 0;
@@ -1124,8 +1281,7 @@ int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram
     if (secro && 0 != (ret = nandroid_restore_partition(backup_path, "/secro")))
         return print_and_error(NULL, ret);   
 
-    sync();
-    ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+    finish_nandroid_job();
     ui_reset_progress();
     ui_print("\nRestore complete!\n");
     return 0;
@@ -1159,6 +1315,11 @@ static int nandroid_undump(const char* partition) {
 
     if (strcmp(partition, "custpack") == 0) {
         if (0 != (ret = nandroid_restore_partition("-", "/custpack")))
+            return ret;
+    }
+    
+    if (strcmp(partition, "cust") == 0) {
+        if (0 != (ret = nandroid_restore_partition("-", "/cust")))
             return ret;
     }
 

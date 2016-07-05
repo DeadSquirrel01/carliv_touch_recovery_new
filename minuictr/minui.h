@@ -106,14 +106,9 @@ int ev_get_epollfd(void);
 
 // Resources
 
-// Returns 0 if no error, else negative.
-int res_create_surface(const char* name, gr_surface* pSurface);
+int res_create_display_surface(const char* name, gr_surface* pSurface);
 int res_create_multi_display_surface(const char* name,
                                      int* frames, gr_surface** pSurface);
-
-static inline int res_create_display_surface(const char* name, gr_surface* pSurface) {
-    return res_create_surface(name, pSurface);
-}
 
 void res_free_surface(gr_surface surface);
 // These are new graphics functions from 5.0 that were not available in

@@ -45,6 +45,7 @@ extern int device_reboot_now(volatile char* key_pressed, int key_code);
 //   - invoke a specific action (a menu position: any non-negative number)
 extern int device_handle_key(int key, int visible);
 
+int key_press_event();
 // Perform a recovery action selected from the menu.  'which' will be
 // the item number of the selected menu item, or a non-negative number
 // returned from device_handle_key().  The menu will be hidden when

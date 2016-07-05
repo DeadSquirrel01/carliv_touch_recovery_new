@@ -46,11 +46,11 @@ typedef struct {
     unsigned ascent;
 } GRFont;
 
-static GRFont *gr_font = 0;
+static GRFont *gr_font = NULL;
 static GGLContext *gr_context = 0;
 static GGLSurface gr_font_texture;
 static GGLSurface gr_mem_surface;
-static minui_backend* gr_backend = 0;
+static minui_backend* gr_backend = NULL;
 static int overscan_percent = OVERSCAN_PERCENT;
 static int overscan_offset_x = 0;
 static int overscan_offset_y = 0;
@@ -60,7 +60,7 @@ static unsigned char gr_current_g = 255;
 static unsigned char gr_current_b = 255;
 static unsigned char gr_current_a = 255;
 
-static GRSurface* gr_draw = 0;
+static GRSurface* gr_draw = NULL;
 
 static void get_memory_surface(GGLSurface* ms) {
 	ms->version = sizeof(*ms);
@@ -239,7 +239,7 @@ static void gr_init_font(void)
 int gr_init(void)
 {
     gr_init_font();
-    gr_draw = 0;
+    gr_draw = NULL;
 
     gr_backend = open_overlay();
     if (gr_backend) {
@@ -261,15 +261,13 @@ int gr_init(void)
         }
     }
 #endif
-
-#ifdef HAS_DRM
     if (!gr_draw) {
         gr_backend = open_drm();
         gr_draw = gr_backend->init(gr_backend);
         if (gr_draw)
             printf("Using drm graphics.\n");
     }
-#endif
+
     if (!gr_draw) {
         gr_backend = open_fbdev();
         gr_draw = gr_backend->init(gr_backend);
@@ -281,7 +279,6 @@ int gr_init(void)
 
     overscan_offset_x = gr_draw->width * overscan_percent / 100;
     overscan_offset_y = gr_draw->height * overscan_percent / 100;
-    
     
     gglInit(&gr_context);
     GGLContext *gl = gr_context;

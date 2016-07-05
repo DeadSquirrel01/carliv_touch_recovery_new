@@ -2516,6 +2516,8 @@ static void create_fstab() {
     write_fstab_root("/system", file);
     if (volume_for_path("/custpack") != NULL)
          write_fstab_root("/custpack", file);
+	if (volume_for_path("/cust") != NULL)
+         write_fstab_root("/cust", file);
     write_fstab_root("/sdcard", file);
     if (volume_for_path("/sd-ext") != NULL)
          write_fstab_root("/sd-ext", file);
