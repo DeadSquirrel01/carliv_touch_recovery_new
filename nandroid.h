@@ -14,6 +14,9 @@ int nandroid_mtk_backup(const char* backup_path, int uboot, int logo, int nvram,
 int nandroid_mtk_restore(const char* backup_path, int uboot, int logo, int nvram, int secro);
 #endif
 
+void finish_nandroid_job();
+int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup, int *nand_starts);
+
 void nandroid_force_backup_format(const char* fmt);
 unsigned int nandroid_get_default_backup_format();
 

@@ -146,7 +146,7 @@ void *adb_sideload_thread(void* v) {
 
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         if (WEXITSTATUS(status) == 3) {
-            ui_print("\nYou need adb 1.0.32 or newer to sideload\nto this device.\n\n");
+            ui_print("\nYou need adb 1.0.32 or newer to sideload to this device.\n\n");
         } else if (!WIFSIGNALED(status)) {
             ui_print("\n(adbd status %d)\n", WEXITSTATUS(status));
         }
@@ -162,8 +162,7 @@ start_sideload(int* wipe_cache, const char* install_file) {
     stop_adbd();
     set_usb_driver(true);
 
-    ui_print("\n\nNow send the package you want to apply\n"
-              "to the device with \"adb sideload <filename>\"...\n");
+    ui_print("\n\nNow send the package you want to apply to the device with \"adb sideload <filename>\"...\n");
 
     sideload_data.wipe_cache = wipe_cache;
     sideload_data.install_file = install_file;

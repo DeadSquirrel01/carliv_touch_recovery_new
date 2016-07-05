@@ -53,8 +53,8 @@ static int gShowBackButton = 0;
 UIParameters ui_parameters = {
     6,       // indeterminate progress bar frames
     20,      // fps
-    0,       // installation icon frames (0 == static image)
-    60, 190, // installation icon overlay offset
+    6,       // installation icon frames (0 == static image)
+    10, 190, // installation icon overlay offset
 };
 
 static pthread_mutex_t gUpdateMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -64,6 +64,7 @@ static gr_surface *gProgressBarIndeterminate;
 static gr_surface gProgressBarEmpty;
 static gr_surface gProgressBarFill;
 static gr_surface gVirtualKeys;
+static int ui_has_initialized = 0;
 static int ui_log_stdout = 1;
 
 static int boardEnableKeyRepeat = 0;
@@ -82,8 +83,6 @@ static const struct { gr_surface* surface; const char *name; } BITMAPS[] = {
 
 static int gCurrentIcon = 0;
 static int gInstallingFrame = 0;
-
-static struct timeval lastprogupd = (struct timeval) {0};
 
 static enum ProgressBarType {
     PROGRESSBAR_TYPE_NONE,
@@ -154,7 +153,7 @@ static long long gettime_usec() {
 // use clock_gettime for elapsed time
 // this is nsec precise + less prone to issues for elapsed time
 // unsigned integers cannot be negative (overflow): set error return code to 0 (1.1.1970 00:00)
-unsigned long long gettime_nsec() {
+static unsigned long long gettime_nsec() {
     struct timespec ts;
     static int err = 0;
 
@@ -220,6 +219,7 @@ static void draw_background_locked(int icon) {
 }
 
 static void ui_increment_frame() {
+    if (!ui_has_initialized) return;
     gInstallingFrame =
         (gInstallingFrame + 1) % ui_parameters.installing_frames;
 }
@@ -452,6 +452,8 @@ void fast_ui_init(void) {
 }
 
 void draw_menu() {
+    if (show_text) {
+        // don't "disable" the background any more with this...
         gr_color(0, 0, 0, 110);
         gr_fill(0, 0, gr_fb_width(), gr_fb_height());
 
@@ -529,6 +531,8 @@ void draw_menu() {
           gr_color(NORMAL_TEXT_COLOR);
           draw_text_line(start_row + r, text[(cur_row + r) % MAX_ROWS], CHAR_HEIGHT, LEFT_ALIGN);
         }
+    }
+
     draw_virtualkeys_locked();
 }
 
@@ -545,27 +549,27 @@ static int ui_menu_header_offset() {
 // Redraw everything on the screen.  Does not flip pages.
 // Should only be called with gUpdateMutex locked.
 static void draw_screen_locked(void) {
-	draw_background_locked(gCurrentIcon);
-    if (!show_text) {	    
-	    draw_progress_locked();
-    } else {
-	    draw_menu();
-	}
+    if (!ui_has_initialized) return;
+    draw_background_locked(gCurrentIcon);
+    draw_progress_locked();
+    draw_menu();
 }
 
 // Redraw everything on the screen and flip the screen (make it visible).
 // Should only be called with gUpdateMutex locked.
 static void update_screen_locked(void) {
+    if (!ui_has_initialized) return;
     draw_screen_locked();
     gr_flip();
 }
 
 // Updates only the progress bar, if possible, otherwise redraws the screen.
 // Should only be called with gUpdateMutex locked.
-static void update_progress_locked(void)
-{
-    // set minimum delay between progress updates if we have a text overlay
-    // exception: gProgressScopeDuration != 0: to keep zip installer refresh behavior
+static void update_progress_locked(void) {
+    if (!ui_has_initialized) return;
+
+    // minimum of UI_UPDATE_PROGRESS_INTERVAL msec delay between progress updates if we have a text overlay
+    // exception: gProgressScopeDuration != 0: to keep zip installer refresh behaviour
     if (show_text && t_last_progress_update > 0 && gProgressScopeDuration == 0 && timenow_msec() - t_last_progress_update < UI_UPDATE_PROGRESS_INTERVAL)
         return;
 
@@ -588,24 +592,22 @@ static void *progress_thread(void *cookie) {
         int redraw = 0;
 
         // update the progress bar animation, if active
-        // update the spinning cube animation, even if no progress bar
-        if (gProgressBarType == PROGRESSBAR_TYPE_INDETERMINATE ||
-                gCurrentIcon == BACKGROUND_ICON_INSTALLING) {
+        // skip this if we have a text overlay (too expensive to update)
+        if (gProgressBarType == PROGRESSBAR_TYPE_INDETERMINATE) {
             redraw = 1;
+        } else if (gProgressBarType == PROGRESSBAR_TYPE_NORMAL && gProgressScopeDuration > 0) {
+            // move the progress bar forward on timed intervals, if configured
+            double elapsed = now() - gProgressScopeTime;
+            float progress = 1.0 * elapsed / gProgressScopeDuration;
+            if (progress > 1.0) progress = 1.0;
+            if (progress > gProgress) {
+                gProgress = progress;
+                redraw = 1;
+            }
         }
 
-        // move the progress bar forward on timed intervals, if configured
-        int duration = gProgressScopeDuration;
-        if (gProgressBarType == PROGRESSBAR_TYPE_NORMAL) {
-            if (duration > 0) {
-                double elapsed = now() - gProgressScopeTime;
-                float progress = 1.0 * elapsed / duration;
-                if (progress > 1.0) progress = 1.0;
-                if (progress > gProgress) {
-                    gProgress = progress;
-                    redraw = 1;
-                }
-            }
+        if (gCurrentIcon == BACKGROUND_ICON_INSTALLING) {
+            redraw = 1;
         }
 
         if (redraw) update_progress_locked();
@@ -877,14 +879,28 @@ static int touch_device_init(int fd) {
         abs_count++;
         return -1;
     }
-
-    if (strcmp(abs_device[abs_count].deviceName, "bma250") == 0 ||
-            strcmp(abs_device[abs_count].deviceName, "bma150") == 0 ||
-            strcmp(abs_device[abs_count].deviceName, "lsm303dlhc_acc_lt") == 0) {
+    
+#ifndef TOUCH_INPUT_BLACKLIST
+    if (strcmp(abs_device[abs_count].deviceName, "bma250") == 0 || strcmp(abs_device[abs_count].deviceName, "bma150") == 0) {
         abs_device[abs_count].ignored = 1;
         abs_count++;
         return -1;
     }
+#else
+    char* bl = strdup(EXPAND(TOUCH_INPUT_BLACKLIST));
+    char* blacklist = strtok(bl, "\n");
+
+    while (blacklist != NULL) {
+        if (strcmp(abs_device[abs_count].deviceName, blacklist) == 0) {
+			printf("blacklisting %s input device\n", abs_device[abs_count].deviceName);
+	        abs_device[abs_count].ignored = 1;
+	        abs_count++;
+	        return -1;
+	    }
+        blacklist = strtok(NULL, "\n");
+    }
+    free(bl);
+#endif
 
     struct input_absinfo absinfo_x;
     struct input_absinfo absinfo_y;
@@ -1498,6 +1514,7 @@ static void *input_thread(void *cookie) {
 }
 
 void ui_init(void) {
+    ui_has_initialized = 1;
     gr_init();
     ev_init(input_callback, NULL);
     touch_init();
@@ -1574,6 +1591,9 @@ void ui_set_background(int icon) {
 }
 
 void ui_show_indeterminate_progress() {
+    if (!ui_has_initialized)
+        return;
+
     pthread_mutex_lock(&gUpdateMutex);
     if (gProgressBarType != PROGRESSBAR_TYPE_INDETERMINATE) {
         gProgressBarType = PROGRESSBAR_TYPE_INDETERMINATE;
@@ -1583,6 +1603,9 @@ void ui_show_indeterminate_progress() {
 }
 
 void ui_show_progress(float portion, int seconds) {
+    if (!ui_has_initialized)
+        return;
+
     pthread_mutex_lock(&gUpdateMutex);
     gProgressBarType = PROGRESSBAR_TYPE_NORMAL;
     gProgressScopeStart += gProgressScopeSize;
@@ -1595,6 +1618,9 @@ void ui_show_progress(float portion, int seconds) {
 }
 
 void ui_set_progress(float fraction) {
+    if (!ui_has_initialized)
+        return;
+
     pthread_mutex_lock(&gUpdateMutex);
     if (fraction < 0.0) fraction = 0.0;
     if (fraction > 1.0) fraction = 1.0;
@@ -1611,6 +1637,9 @@ void ui_set_progress(float fraction) {
 }
 
 void ui_reset_progress() {
+    if (!ui_has_initialized)
+        return;
+
     pthread_mutex_lock(&gUpdateMutex);
     gProgressBarType = PROGRESSBAR_TYPE_NONE;
     gProgressScopeStart = 0;
@@ -1658,6 +1687,9 @@ void ui_print(const char *fmt, ...) {
 
     if (ui_log_stdout)
         fputs(buf, stdout);
+
+    if (!ui_has_initialized)
+        return;
 
     // This can get called before ui_init(), so be careful.
     pthread_mutex_lock(&gUpdateMutex);
@@ -1829,8 +1861,7 @@ void ui_cancel_wait_key() {
 }
 
 int ui_wait_key() {
-    if (boardEnableKeyRepeat)
-        return ui_wait_key_with_repeat();
+    if (boardEnableKeyRepeat) return ui_wait_key_with_repeat();
 
     pthread_mutex_lock(&key_queue_mutex);
     int timeouts = UI_WAIT_KEY_TIMEOUT_SEC;
@@ -2000,11 +2031,17 @@ int ui_get_selected_item() {
 }
 
 int ui_handle_key(int key, int visible) {
-/*#ifdef BOARD_TOUCH_RECOVERY*/
     return touch_handle_key(key, visible);
-/*#else
-    return device_handle_key(key, visible);
-#endif*/
+}
+
+int key_press_event() {
+    int key = ui_check_key();
+    int action = ui_handle_key(key, 1);
+    return action;
+}
+
+int is_ui_initialized() {
+    return ui_has_initialized;
 }
 
 void ui_delete_line() {

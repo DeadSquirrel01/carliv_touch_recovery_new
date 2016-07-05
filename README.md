@@ -2,15 +2,15 @@
 
 [**Home page**](http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290)
 
-- version 5.6 is for Lollipop (cm 12.1 or aicp lp-5.1).
+- version 5.7 is for Lollipop (cm 12.1, aicp lp or resurrection remix lp).
 The version starting number is related to android version.
 
-This is a CWM based recovery and I did put up some work to update it to lollipop (cm 12.1) after official cwm development stopped at kitkat. It works with *LOLLIPOP* kernels and it builds with cm 12.1 or aicp lp-5.1. 
+This is a CWM based recovery and I did put up some work to update it to lollipop (cm 12.1) after official cwm development stopped at kitkat. It works with *LOLLIPOP* kernels and it builds with cm 12.1, aicp lp or resurrection remix lp. 
 For gui I ported [PhilZ Recovery](http://forum.xda-developers.com/showthread.php?t=2201860) full touch module. 
 Because the vold in cm 12.1 doesn't support cwm anymore I had to use the old *fstab1* type for functionality, although for building reason a valid recovery.fstab should be provided in device tree. In the last part there are some building hints to make it clear for those who want to try building it.
 
 Features:
-- EXT4 and F2FS by default, both built in.
+- EXT4 and F2FS support (for f2fs use the BoardConfig flag).
 - full touch menu ported by me from PhilZ touch Recovery. The old Napstar-xda touch module was good but it's quite old and to update that was too much work. Actually There is a version 4 with that touch module, all working, but the touch doesn't work with some input drivers and I had to give up on it for the new and improved version from PhilZ.
 - all cwm functionalities are up and working (adb, sideload, backup, restore, install, mass storage...). There is no mtp and if your phone doesn't have an external sdcard you can't connect it to PC while is in recovery mode. But there is usb-otg support, of course if your phone has a kernel capable to do that.
 - added new menu for backup and restore advanced, to use it for backing or restoring only a specific partition and I also ported from PhilZ the multizip flashing function.
@@ -38,7 +38,7 @@ I worked alone on this, there is no team here, not because I don't want to :), b
 
 ____
 
-To build you need a local repo of cm-12.1 or aicp-lp5.1 and a proper device tree. To see how a buildable  device tree looks check [this one from my github](https://github.com/carliv/device_mlais_mx)).
+To build you need a local repo of cm 12.1, aicp lp or resurrection remix lp and a proper device tree. To see how a buildable  device tree looks check [this one from my github](https://github.com/carliv/device_mlais_mx)).
 
 Some things to be considered:
 
@@ -81,6 +81,9 @@ Carliv Touch Recovery specific flags:
  
 - for touch menu, if your phone has an input driver with PROTOCOL_TYPE_B (synaptic is an example, or many samsung devices); if you have access to, check your kernel input driver for something like this `#define PROTOCOL_TYPE_B` - google it if you want to know more about this
 - `BOARD_USE_PROTOCOL_TYPE_B := true`
+
+- to block an input device use
+- `TOUCH_INPUT_BLACKLIST := "devicename"`
 
 For system.prop from device tree:
 

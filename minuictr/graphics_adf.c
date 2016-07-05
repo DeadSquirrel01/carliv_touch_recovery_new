@@ -159,7 +159,7 @@ static int adf_device_init(struct adf_pdata *pdata, struct adf_device *dev)
     return err;
 }
 
-static GRSurface* adf_init(struct minui_backend *backend)
+static GRSurface* adf_init(minui_backend *backend)
 {
     struct adf_pdata *pdata = (struct adf_pdata *)backend;
     adf_id_t *dev_ids = NULL;

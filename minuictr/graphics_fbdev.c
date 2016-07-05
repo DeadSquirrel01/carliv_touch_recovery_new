@@ -41,11 +41,10 @@ static void fbdev_exit(minui_backend*);
 
 static GRSurface gr_framebuffer[2];
 static bool double_buffered;
-static GRSurface* gr_draw = 0;
+static GRSurface* gr_draw = NULL;
 static int displayed_buffer;
 
 static struct fb_var_screeninfo vi;
-static struct fb_fix_screeninfo fi;
 static int fb_fd = -1;
 static __u32 smem_len;
 
@@ -60,7 +59,7 @@ minui_backend* open_fbdev() {
     return &my_backend;
 }
 
-static void fbdev_blank(struct minui_backend* backend __unused, bool blank)
+static void fbdev_blank(minui_backend* backend __unused, bool blank)
 {
 #ifdef RECOVERY_LCD_BACKLIGHT_PATH
     int fd;
@@ -100,9 +99,12 @@ static void set_displayed_framebuffer(unsigned n)
     displayed_buffer = n;
 }
 
-static GRSurface* fbdev_init(struct minui_backend* backend) {
+static GRSurface* fbdev_init(minui_backend* backend) {
     int retry = 20;
     int fd = -1;
+    void *bits;
+
+    struct fb_fix_screeninfo fi;
     while (fd == -1) {
         fd = open("/dev/graphics/fb0", O_RDWR);
         if (fd == -1) {
@@ -117,38 +119,14 @@ static GRSurface* fbdev_init(struct minui_backend* backend) {
         }
     }
 
-    if (ioctl(fd, FBIOGET_VSCREENINFO, &vi) < 0) {
-        perror("failed to get fb0 info (FBIOGET_VSCREENINFO)");
-        close(fd);
-        return NULL;
-    }
-
-#ifdef RECOVERY_FORCE_RGB_565
-    // Changing fb_var_screeninfo can affect fb_fix_screeninfo,
-    // so this needs done before querying for fi.
-    printf("Forcing pixel format: RGB_565\n");
-    vi.blue.offset    = 0;
-    vi.green.offset   = 5;
-    vi.red.offset     = 11;
-    vi.blue.length    = 5;
-    vi.green.length   = 6;
-    vi.red.length     = 5;
-    vi.blue.msb_right = 0;
-    vi.green.msb_right = 0;
-    vi.red.msb_right = 0;
-    vi.transp.offset  = 0;
-    vi.transp.length  = 0;
-    vi.bits_per_pixel = 16;
-
-    if (ioctl(fd, FBIOPUT_VSCREENINFO, &vi) < 0) {
-        perror("failed to put force_rgb_565 fb0 info");
-        close(fd);
-        return NULL;
-    }
-#endif
-
     if (ioctl(fd, FBIOGET_FSCREENINFO, &fi) < 0) {
         perror("failed to get fb0 info (FBIOGET_FSCREENINFO)");
+        close(fd);
+        return NULL;
+    }
+
+    if (ioctl(fd, FBIOGET_VSCREENINFO, &vi) < 0) {
+        perror("failed to get fb0 info (FBIOGET_VSCREENINFO)");
         close(fd);
         return NULL;
     }
@@ -174,7 +152,7 @@ static GRSurface* fbdev_init(struct minui_backend* backend) {
            vi.green.offset, vi.green.length,
            vi.blue.offset, vi.blue.length);
 
-    void* bits = mmap(0, fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    bits = mmap(0, fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (bits == MAP_FAILED) {
         perror("failed to mmap framebuffer");
         close(fd);
@@ -182,6 +160,22 @@ static GRSurface* fbdev_init(struct minui_backend* backend) {
     }
 
     memset(bits, 0, fi.smem_len);
+
+#ifdef RECOVERY_FORCE_RGB_565
+    printf("Forcing pixel format: RGB_565\n");
+    vi.blue.offset    = 0;
+    vi.green.offset   = 5;
+    vi.red.offset     = 11;
+    vi.blue.length    = 5;
+    vi.green.length   = 6;
+    vi.red.length     = 5;
+    vi.blue.msb_right = 0;
+    vi.green.msb_right = 0;
+    vi.red.msb_right = 0;
+    vi.transp.offset  = 0;
+    vi.transp.length  = 0;
+    vi.bits_per_pixel = 16;
+#endif
 
     gr_framebuffer[0].width = vi.xres;
     gr_framebuffer[0].height = vi.yres;
@@ -247,9 +241,7 @@ static GRSurface* fbdev_init(struct minui_backend* backend) {
         double_buffered = false;
         printf("single buffered\n");
     }
-#if defined(RECOVERY_BGRA)
-    printf("RECOVERY_BGRA\n");
-#endif
+    
     fb_fd = fd;
     set_displayed_framebuffer(0);
 
@@ -263,7 +255,7 @@ static GRSurface* fbdev_init(struct minui_backend* backend) {
     return gr_draw;
 }
 
-static GRSurface* fbdev_flip(struct minui_backend* backend __unused) {
+static GRSurface* fbdev_flip(minui_backend* backend __unused) {
 #if defined(RECOVERY_BGRA)
     // In case of BGRA, do some byte swapping
     unsigned int idx;
@@ -316,7 +308,7 @@ static GRSurface* fbdev_flip(struct minui_backend* backend __unused) {
     return gr_draw;
 }
 
-static void fbdev_exit(struct minui_backend* backend __unused) {
+static void fbdev_exit(minui_backend* backend __unused) {
     close(fb_fd);
     fb_fd = -1;
 
