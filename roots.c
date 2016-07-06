@@ -186,8 +186,22 @@ char* get_primary_storage_path() {
     return primary_storage_path;
 }
 
+int get_num_extra_volumes() {
+    int num = 0;
+    int i;
+    for (i = 0; i < get_num_volumes(); i++) {
+        Volume* v = get_device_volumes() + i;
+        if (strcmp("/internal_sd", v->mount_point) == 0 || strcmp("/external_sd", v->mount_point) == 0)
+            num++;
+    }
+    return num;
+}
+
 static char* extra_storage_path = NULL;
 char* get_extra_storage_path() {
+	int num_extra_volumes = get_num_extra_volumes();
+	if (num_extra_volumes == 0)
+        return NULL;
 	if (extra_storage_path == NULL) {
 		if (volume_for_path("/internal_sd") != NULL) {
 	        extra_storage_path = "/internal_sd";

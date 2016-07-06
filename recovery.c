@@ -960,7 +960,7 @@ int main(int argc, char **argv) {
 
     device_ui_init(&ui_parameters);
     ui_init();
-    ui_print(EXPAND(RECOVERY_VERSION)" ** Android "EXPAND(RECOVERY_BUILD_OS)"\n");
+    ui_print(EXPAND(RECOVERY_VERSION)" * "EXPAND(RECOVERY_DEVICE)"\n");
     ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
     
     load_volume_table();
@@ -1059,7 +1059,6 @@ int main(int argc, char **argv) {
             }
         }
         if (status != INSTALL_SUCCESS) {
-            copy_logs();
             ui_print("Installation aborted.\n");
         }
     } else if (wipe_data) {
@@ -1070,13 +1069,11 @@ int main(int argc, char **argv) {
         if (has_datadata() && erase_volume("/datadata")) status = INSTALL_ERROR;
         if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;
         if (status != INSTALL_SUCCESS) {
-            copy_logs();
             ui_print("Data wipe failed.\n");
         }
     } else if (wipe_cache) {
         if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;
         if (status != INSTALL_SUCCESS) {
-            copy_logs();
             ui_print("Cache wipe failed.\n");
         }
     } else if (sideload) {

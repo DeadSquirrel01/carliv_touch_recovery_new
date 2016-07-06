@@ -45,6 +45,7 @@ int ensure_path_unmounted(const char* path);
 // it is mounted.
 int format_volume(const char* volume);
 int use_migrated_storage();
+int get_num_extra_volumes();
 char* get_primary_storage_path();
 char* get_extra_storage_path();
 char* get_usb_storage_path();
