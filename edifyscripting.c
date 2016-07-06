@@ -386,6 +386,7 @@ int run_script(char* filename) {
 
 int run_and_remove_extendedcommand() {
 	char* primary_path = get_primary_storage_path();
+	char* extra_path = get_extra_storage_path();
     char tmp[PATH_MAX];
     sprintf(tmp, "cp %s /tmp/%s", EXTENDEDCOMMAND_SCRIPT, basename(EXTENDEDCOMMAND_SCRIPT));
     __system(tmp);
@@ -399,22 +400,24 @@ int run_and_remove_extendedcommand() {
         }
         sleep(1);
     }
-    remove("/sdcard/clockworkmod/.recoverycheckpoint");
+    sprintf(tmp, "%s/clockworkmod/.recoverycheckpoint", primary_path);
+    remove(tmp);
     if (i == 0) {
         ui_print("Timed out waiting for SD card... continuing anyways.");
     }
 
     ui_print("Verifying SD Card marker...\n");
     struct stat st;
-    if (stat("/sdcard/clockworkmod/.salted_hash", &st) != 0) {
+    sprintf(tmp, "%s/clockworkmod/.salted_hash", primary_path);
+    if (stat(tmp, &st) != 0) {
         ui_print("SD Card marker not found...\n");
-        if (volume_for_path("/internal_sd") != NULL) {
-            ui_print("Checking Internal SD Card marker...\n");
+        if (volume_for_path(extra_path) != NULL) {
+            ui_print("Checking Extra SD Card marker...\n");
             ensure_path_unmounted(primary_path);
-            if (ensure_path_mounted_at_mount_point("/internal_sd", primary_path) != 0) {
-                ui_print("Internal SD Card marker not found... continuing anyways.\n");
+            if (ensure_path_mounted(extra_path) != 0) {
+                ui_print("Extra SD Card marker not found... continuing anyways.\n");
                 // unmount everything, and remount as normal
-                ensure_path_unmounted("/internal_sd");
+                ensure_path_unmounted(extra_path);
                 ensure_path_unmounted(primary_path);
 
                 ensure_path_mounted(primary_path);
