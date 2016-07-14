@@ -29,6 +29,7 @@ LOCAL_SRC_FILES := \
     bootloader.c \
     install.c \
     roots.c \
+    default_recovery_ui.c \
     ui.c \
     mtdutils/mounts.c \
     extendedcommands.c \
@@ -73,7 +74,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v6.5.1
+RECOVERY_VERSION := $(RECOVERY_NAME) v6.6
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -225,16 +226,15 @@ LOCAL_C_INCLUDES += system/extras/ext4_utils system/core/fs_mgr/include external
 LOCAL_C_INCLUDES += system/vold
 endif
 
+ifeq ($(BOARD_USE_ADOPTED_STORAGE), true)
+LOCAL_CFLAGS += -DUSE_ADOPTED_STORAGE
+#LOCAL_STATIC_LIBRARIES += liblvm libdevmapper
+endif
+
 ifeq ($(BOARD_CUSTOM_RECOVERY_KEYMAPPING),)
   LOCAL_SRC_FILES += default_recovery_keys.c
 else
   LOCAL_SRC_FILES += $(BOARD_CUSTOM_RECOVERY_KEYMAPPING)
-endif
-
-ifeq ($(BOARD_CUSTOM_RECOVERY_UI),)
-  LOCAL_SRC_FILES += default_recovery_ui.c
-else
-  LOCAL_SRC_FILES += $(BOARD_CUSTOM_RECOVERY_UI)
 endif
 
 LOCAL_C_INCLUDES += system/extras/ext4_utils
@@ -268,6 +268,10 @@ LOCAL_ADDITIONAL_DEPENDENCIES += ctrfs
 endif
 
 LOCAL_ADDITIONAL_DEPENDENCIES += carliv
+
+ifeq ($(BOARD_USE_ADOPTED_STORAGE), true)
+LOCAL_ADDITIONAL_DEPENDENCIES += dms
+endif
 
 LOCAL_ADDITIONAL_DEPENDENCIES += $(RECOVERY_SYMLINKS) $(RECOVERY_BUSYBOX_SYMLINKS)
 

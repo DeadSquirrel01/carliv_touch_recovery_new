@@ -271,7 +271,11 @@ int mtk_p_size(const char* path) {
     Volume* volume;
     
     if (is_data_media_volume_path(path))
-        volume = volume_for_path("/data");
+#ifdef USE_ADOPTED_STORAGE
+        volume = volume_for_path("/data_sd");
+#else
+		volume = volume_for_path("/data");
+#endif
     else
         volume = volume_for_path(path);
 

@@ -616,18 +616,24 @@ void wipe_preflash(int confirm) {
     erase_volume("/system");
     ui_print("System wipe complete.\n");
     sleep(1);
+    if (is_data_media()) preserve_data_media(1);
 	if (!is_encrypted_data()) {
-    ui_print("\n-- Wiping data...\n");
-    device_wipe_data();
-    erase_volume("/data");
+	    ui_print("\n-- Wiping data...\n");
+	    device_wipe_data();
+	    erase_volume("/data");
+	    if (has_datadata()) {
+	        erase_volume("/datadata");
+	    }
 	} else {
-	ui_print("\n-- Data is encrypted. If you format it you will loose encryption. If you still want to do it use the Wipe data option in this menu.\n");
+		ui_print("\n-- Data not formated because it is encrypted. If you format it you will loose encryption. If you want to do it use the Wipe data option in this menu.\n");
+	} 
+#ifdef USE_ADOPTED_STORAGE
+	if (has_adopted_storage()) {
+		ui_print("\n-- Adopted Storage not formated. If you format it you will loose all data on it. If you still want to do it use the Wipe Adopted data option in this menu.\n");
 	}
-    if (has_datadata()) {
-        erase_volume("/datadata");
-    }
+#endif  
     if (volume_for_path("/sd-ext") != NULL) erase_volume("/sd-ext");
-    erase_volume(get_android_secure_path());
+    if (get_android_secure_path() != NULL) erase_volume(get_android_secure_path());
     ui_print("Data wipe complete.\n");
     sleep(1);
     ui_print("\n-- Wiping cache...\n");
@@ -646,7 +652,7 @@ void wipe_preflash(int confirm) {
 	ui_print("Dalvik Cache wiped.\n");
 	if (!is_encrypted_data()) ensure_path_unmounted("/data");
 	if (volume_for_path("/sd-ext") != NULL) ensure_path_unmounted("/sd-ext"); 
-	ui_print("\nPreflash wipe complete. Don't reboot to Android right now [*Reboot phone* --first option in menu], because there is no system files in it. Either flash a new ROM or restore a backup to avoid troubles!!!.\n");
+	ui_print("\nPreflash wipe complete. Don't reboot to Android right now with \"Reboot phone\" --first option in menu, because there is no system files in it. Either flash a new ROM or restore a backup to avoid troubles!!!.\n");
 	sleep(1);   
 }
 
@@ -660,24 +666,41 @@ void wipe_data(int confirm) {
 	if (is_encrypted_data()) {
 		if (!confirm_selection("Are you sure? You will loose encryption!", "Yes"))
 			return;
-		ui_print("\n-- Formating data and data/media. Encryption will be lost...\n");
-		preserve_data_media(0);
-	    format_volume("/data");
-	    preserve_data_media(1);
+		ui_print("\n-- Formating data. Encryption will be lost...\n");
+		if (is_data_media()) preserve_data_media(1);
+		device_wipe_data();
+	    erase_volume("/data");
 	    set_encryption_state(0);
+	    if (has_datadata()) {
+	        erase_volume("/datadata");
+	    }
 	} else {
 		ui_print("\n-- Wiping data...\n");
+		if (is_data_media()) preserve_data_media(1);
 	    device_wipe_data();
 	    erase_volume("/data");
+	    if (has_datadata()) {
+	        erase_volume("/datadata");
+	    }
 	}
     erase_volume("/cache");
-    if (has_datadata()) {
-        erase_volume("/datadata");
-    }
     if (volume_for_path("/sd-ext") != NULL) erase_volume("/sd-ext");
-    erase_volume(get_android_secure_path());
+    if (get_android_secure_path() != NULL) erase_volume(get_android_secure_path());
     ui_print("Data wipe complete.\n");
 }
+
+#ifdef USE_ADOPTED_STORAGE
+void wipe_adopted(int confirm) {
+    if (confirm && !confirm_selection( "Confirm wipe Adopted data?", "Yes - Wipe Adopted data"))
+        return;
+        
+    ui_print("\n-- Wiping Adopted data...\n");
+    if (is_data_media()) preserve_data_media(1);
+    device_wipe_adopted();
+    erase_volume("/data_sd");
+    ui_print("Adopted data wipe complete.\n");
+}
+#endif
 
 void wipe_cache(int confirm) {
     if (confirm && !confirm_selection( "Confirm wipe cache?", "Yes - Wipe cache"))
@@ -964,6 +987,10 @@ int main(int argc, char **argv) {
     ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
     
     load_volume_table();
+    encrypted_data_mounted = 0;
+	data_is_decrypted = 0;
+	adopted_storage_mounted = 0;
+	adopted_storage_decrypted = 0;
     process_volumes();
 #ifdef QCOM_HARDWARE
     parse_t_daemon_data_files();
@@ -1063,14 +1090,26 @@ int main(int argc, char **argv) {
         }
     } else if (wipe_data) {
         if (device_wipe_data()) status = INSTALL_ERROR;
+#ifdef USE_ADOPTED_STORAGE
+		if (device_wipe_adopted()) status = INSTALL_ERROR;
+#endif
         preserve_data_media(0);
         if (erase_volume("/data")) status = INSTALL_ERROR;
+#ifdef USE_ADOPTED_STORAGE
+        if (erase_volume("/data_sd")) status = INSTALL_ERROR;
+#endif
         preserve_data_media(1);
         if (has_datadata() && erase_volume("/datadata")) status = INSTALL_ERROR;
-        if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;
+        if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;        
+#ifdef USE_ADOPTED_STORAGE
         if (status != INSTALL_SUCCESS) {
+            ui_print("Data and/or Adopted data wipe failed.\n");
+        }
+#else
+		if (status != INSTALL_SUCCESS) {
             ui_print("Data wipe failed.\n");
         }
+#endif
     } else if (wipe_cache) {
         if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;
         if (status != INSTALL_SUCCESS) {
@@ -1108,17 +1147,6 @@ int main(int argc, char **argv) {
             LOGI("Skipping execution of extendedcommand, file not found...\n");
         }
     }
-    
-#ifdef BOARD_INCLUDE_CRYPTO
-		if (volume_for_path("/data") != NULL && ensure_path_mounted("/data") != 0) {
-			set_encryption_state(1);
-			setup_encrypted_data();
-		} else {
-			set_encryption_state(0);
-		}
-#else
-		set_encryption_state(0);
-#endif
 
     if (headless) {
         headless_wait();

@@ -2,7 +2,7 @@
 
 [**Home page**](http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290)
 
-- version 6.5 is for Marshmallow (cm 13, aicp-mm or resurrection remix mm).
+- version 6.6 is for Marshmallow (cm 13, aicp-mm or resurrection remix mm).
 The version starting number is related to android version.
 
 This is a CWM based recovery and I did put up some work to update it to marshmallow (cm-13) after official cwm development stopped at kitkat. It works with *MARSHMALLOW* kernels and it builds with cm 13, aicp-mm or resurrection remix mm. 
@@ -86,6 +86,9 @@ NOTE: in cm 13, and other android 6 sources too, you can't build with this flag 
 - to block an input device use
 - `TOUCH_INPUT_BLACKLIST := "devicename"`
 
+- if you use Adopted Storage
+- `BOARD_USE_ADOPTED_STORAGE := true`
+
 For system.prop from device tree:
 
 ```
@@ -142,6 +145,12 @@ or
 /sdcard 	datamedia	/dev/null
 /external_sd		vfat	/dev/block/mmcblk1p1	/dev/block/mmcblk1
 ```
+
+If you are using the adopted storage feature for external sd card, define this 
+
+`/data_sd	ext4	/dev/block/mmcblk1p2	fs_options=adopted`
+
+and remove or comment out the line for external sd card.
 
 As you can see the internal storage can be sdcard or internal_sd and external sdcard can be sdcard or external_sd, but internal storage can't be external_sd or external sdcard internal_sd.
 If your phone has OTG support you can use that too defining it like this

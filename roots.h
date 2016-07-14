@@ -27,9 +27,8 @@ Volume* volume_for_path(const char* path);
 
 // Make sure that the volume 'path' is on is mounted.  Returns 0 on
 // success (volume is mounted).
-#ifdef BOARD_INCLUDE_CRYPTO
 int setup_encrypted_data();
-#endif
+int mount_encrypted_data();
 void set_encryption_state(int val);
 int is_encrypted_data();
 
@@ -67,5 +66,12 @@ int is_data_media_volume_path(const char* path);
 void preserve_data_media(int val);
 int is_data_media_preserved();
 int setup_install_mounts();
+int encrypted_data_mounted;
+int data_is_decrypted;
+int has_adopted_storage();
+int mount_adopted_storage();
+int setup_adopted_storage();
+int adopted_storage_mounted;
+int adopted_storage_decrypted;
 
 #endif  // RECOVERY_ROOTS_H_

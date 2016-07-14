@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
+#include <limits.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -41,6 +43,8 @@
 #include "cutils/properties.h"
 
 extern struct selabel_handle *sehandle;
+
+static int encryption_state = 0;
 
 int num_volumes;
 Volume* device_volumes;
@@ -166,8 +170,8 @@ void load_volume_table() {
 
 Volume* volume_for_path(const char* path) {
     int i;
-    for (i = 0; i < num_volumes; ++i) {
-        Volume* v = device_volumes+i;
+    for (i = 0; i < get_num_volumes(); i++) {
+        Volume* v = get_device_volumes() + i;
         int len = strlen(v->mount_point);
         if (strncmp(path, v->mount_point, len) == 0 &&
             (path[len] == '\0' || path[len] == '/')) {
@@ -175,6 +179,64 @@ Volume* volume_for_path(const char* path) {
         }
     }
     return NULL;
+}
+
+int is_data_media() {
+    int i;
+    for (i = 0; i < get_num_volumes(); i++) {
+        Volume* vol = get_device_volumes() + i;
+        if (strcmp(vol->fs_type, "datamedia") == 0)
+            return 1;
+    }
+    return 0;
+}
+
+int use_migrated_storage() {
+	struct stat s;
+#ifdef USE_ADOPTED_STORAGE
+	return lstat("/data_sd/media/0", &s) == 0;
+#else
+	return lstat("/data/media/0", &s) == 0;
+#endif
+}
+
+void setup_data_media() {
+    if (!is_data_media())
+        return;
+        
+    int i;
+    for (i = 0; i < get_num_volumes(); i++) {
+        Volume* vol = get_device_volumes() + i;
+        if (strcmp(vol->fs_type, "datamedia") == 0) {
+#ifdef USE_ADOPTED_STORAGE
+		char* path = "/data_sd/media";
+#else
+		char* path = "/data/media";
+#endif            
+            rmdir(vol->mount_point);
+            mkdir(path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+            if (use_migrated_storage()) {
+#ifdef USE_ADOPTED_STORAGE
+				path = "/data_sd/media/0";
+#else
+				path = "/data/media/0";
+#endif 
+		        mkdir(path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+			}
+
+            LOGI("using %s for %s\n", path, vol->mount_point);
+            symlink(path, vol->mount_point);
+            return;
+        }
+    }
+}
+
+int is_data_media_volume_path(const char* path) {
+    Volume* v = volume_for_path(path);
+    // prevent segfault on bad call
+    if (v == NULL || v->fs_type == NULL)
+        return 0;
+    return strcmp(v->fs_type, "datamedia") == 0;
 }
 
 static char* primary_storage_path = NULL;
@@ -224,22 +286,6 @@ char* get_usb_storage_path() {
     return usb_storage_path;
 }
 
-static int is_migrated_storage = -1;
-
-int use_migrated_storage() {
-	    if (!is_encrypted_data() && ensure_path_mounted("/data") != 0)
-            return 0;
-
-        struct stat s;
-        if (0 == lstat("/data/media/0", &s)) {
-	        is_migrated_storage = 1;
-	    } else {
-			is_migrated_storage = 0;
-		}
-
-    return is_migrated_storage;
-}
-
 static char* android_secure_path = NULL;
 char* get_android_secure_path() {
     if (android_secure_path == NULL) {
@@ -268,51 +314,6 @@ int try_mount(const char* device, const char* mount_point, const char* fs_type, 
     return ret;
 }
 
-int is_data_media() {
-    int i;
-    int has_sdcard = 0;
-    for (i = 0; i < get_num_volumes(); i++) {
-        Volume* vol = get_device_volumes() + i;
-        if (strcmp(vol->fs_type, "datamedia") == 0)
-            return 1;
-        if (strcmp(vol->mount_point, "/sdcard") == 0)
-            has_sdcard = 1;
-        if (strcmp(vol->mount_point, "/internal_sd") == 0)
-            has_sdcard = 1;
-    }
-    return !has_sdcard;
-}
-
-void setup_data_media() {
-    int i;
-    for (i = 0; i < get_num_volumes(); i++) {
-        Volume* vol = get_device_volumes() + i;
-        if (strcmp(vol->fs_type, "datamedia") == 0) {
-            // support /data/media/0
-            char path[16];
-            if (use_migrated_storage())
-                sprintf(path, "/data/media/0");
-            else sprintf(path, "/data/media");
-
-            LOGI("using %s for %s\n", path, vol->mount_point);
-            rmdir(vol->mount_point);
-            mkdir(path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-            symlink(path, vol->mount_point);
-            return;
-        }
-    }
-}
-
-int is_data_media_volume_path(const char* path) {
-    Volume* v = volume_for_path(path);
-    // prevent segfault on bad call
-    if (v == NULL || v->fs_type == NULL)
-        return 0;
-	if (!is_data_media())
-        return 0;
-    return strcmp(v->fs_type, "datamedia") == 0;
-}
-
 static int exec_cmd(const char* path, char* const argv[]) {
     int status;
     pid_t child;
@@ -334,27 +335,33 @@ int ensure_path_mounted(const char* path) {
 int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point) {
 
     if (is_data_media_volume_path(path)) {
-        if (ui_should_log_stdout()) {
+        int ret;
+#ifdef USE_ADOPTED_STORAGE
+		if (ui_should_log_stdout()) {
+            if (use_migrated_storage())
+			    LOGI("using /data_sd/media/0 for %s.\n", path);
+		    else LOGI("using /data_sd/media for %s.\n", path);
+        }
+        if (has_adopted_storage() && 0 != (ret = ensure_path_mounted("/data_sd")))
+            return ret;
+        setup_data_media();
+        return 0;
+#else
+		if (ui_should_log_stdout()) {
             if (use_migrated_storage())
 			    LOGI("using /data/media/0 for %s.\n", path);
 		    else LOGI("using /data/media for %s.\n", path);
         }
-        int ret;
-	    if (!is_encrypted_data() && 0 != (ret = ensure_path_mounted("/data"))) {
+        if (!is_encrypted_data() && 0 != (ret = ensure_path_mounted("/data")))
             return ret;
-		} else if (strstr(path, "/data") == path && is_encrypted_data()) {
-			return 0;
-		} 
-
-        setup_data_media();
+		setup_data_media();
         return 0;
+#endif        
     }
     
     Volume* v = volume_for_path(path);
     if (v == NULL) {
-        // silent failure for sd-ext
-        if (strncmp(path, "/sd-ext", 7) != 0)
-            LOGE("unknown volume for path [%s]\n", path);
+		LOGE("unknown volume for path [%s]\n", path);
         return -1;
     }
     if (strcmp(v->fs_type, "ramdisk") == 0) {
@@ -405,14 +412,12 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
         if ((result = try_mount(v->device2, mount_point, v->fs_type2, v->fs_options2)) == 0)
             return 0;
         return result;
-    } else {
-        ui_set_log_stdout(0);
+    } else {        
         char mount_cmd[PATH_MAX];
         if (strcmp(v->mount_point, mount_point) != 0)
             sprintf(mount_cmd, "mount %s %s", v->device, mount_point);
         else
-            sprintf(mount_cmd, "mount %s", v->mount_point);
-            
+            sprintf(mount_cmd, "mount %s", v->mount_point);   
 		if ((result = __system(mount_cmd)) != 0) {
             if (strcmp(v->fs_type, "auto") == 0) {
                 struct stat s;
@@ -426,23 +431,33 @@ int ensure_path_mounted_at_mount_point(const char* path, const char* mount_point
 					result = exec_cmd(ntfs_path, (char* const*)ntfs_argv);
                 }               
             }
-        }
-        ui_set_log_stdout(1);
+        }        
         return result;
     }
 
-    LOGE("unknown fs_type \"%s\" for %s\n", v->fs_type, mount_point);
     return -1;
 }
 
 int ensure_path_unmounted(const char* path) {
-    // if we are using /data/media, do not unmount /sdcard until !is_data_media_preserved()
+
     if (is_data_media_volume_path(path)) {
-        if (is_data_media_preserved() && is_encrypted_data()) {
+        if (is_data_media_preserved()) {
 	        return 0;
-	    } else {
+	    } else if (is_encrypted_data()) {
+            return 0;
+		} else if (has_adopted_storage()) {
+            return 0;
+		} else {
             return ensure_path_unmounted("/data");
 		}
+    }
+    
+    if (strstr(path, "/data") == path && is_encrypted_data()) {
+        return 0;
+    }
+    
+    if (strstr(path, "/data_sd") == path && has_adopted_storage()) {
+        return 0;
     }
     
     if (strstr(path, "/data") == path && is_data_media() && is_data_media_preserved()) {
@@ -552,6 +567,12 @@ int format_volume(const char* volume) {
         return format_unknown_device(NULL, volume, NULL);
     }
 
+#ifdef USE_ADOPTED_STORAGE
+	if (strcmp(volume, "/data_sd") == 0 && has_adopted_storage()) {
+        return format_unknown_device(NULL, volume, NULL);
+    }
+#endif
+
     if (ensure_path_unmounted(volume) != 0) {
         LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
         return -1;
@@ -639,6 +660,10 @@ int setup_install_mounts() {
 
         } else if (is_encrypted_data()) {
             if (strcmp(v->mount_point, "/data") != 0 && ensure_path_unmounted(v->mount_point) != 0) return -1;
+#ifdef USE_ADOPTED_STORAGE        
+        } else if (has_adopted_storage()) {
+            if (strcmp(v->mount_point, "/data_sd") != 0 && ensure_path_unmounted(v->mount_point) != 0) return -1;
+#endif        
         } else {
             if (ensure_path_unmounted(v->mount_point) != 0) return -1;
         }
@@ -686,13 +711,19 @@ int format_device(const char *device, const char *path, const char *fs_type) {
         }
         return 0;
     }
-
-    if (strcmp(v->mount_point, path) != 0) {
-        return format_unknown_device(v->device, path, NULL);
-    }
     
     if (strcmp(path, "/data") == 0 && is_data_media() && is_data_media_preserved()) {
         return format_unknown_device(NULL, path, NULL);
+    }
+
+#ifdef USE_ADOPTED_STORAGE
+	if (strcmp(path, "/data_sd") == 0 && has_adopted_storage()) {
+        return format_unknown_device(NULL, path, NULL);
+    }
+#endif
+
+    if (strcmp(v->mount_point, path) != 0) {
+        return format_unknown_device(v->device, path, NULL);
     }
 
     if (ensure_path_unmounted(path) != 0) {
@@ -765,11 +796,20 @@ extern int format_ext3_device(const char *device);
 
 int format_unknown_device(const char *device, const char* path, const char *fs_type) {
     LOGI("Formatting unknown device.\n");
+    
+    if (is_data_media_volume_path(path)) {
+		int rc = 0;
+#ifdef USE_ADOPTED_STORAGE		        
+        rc = rmtree_except("/data_sd/media", NULL);
+#else
+        rc = rmtree_except("/data/media", NULL);       
+#endif
+		return rc;
+    }
 
     if (fs_type != NULL && get_flash_type(fs_type) != UNSUPPORTED)
         return erase_raw_partition(fs_type, device);
 
-    // if this is SDEXT:, don't worry about it if it does not exist.
     if (0 == strcmp(path, "/sd-ext")) {
         struct stat st;
         Volume *vol = volume_for_path("/sd-ext");
@@ -799,16 +839,8 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
         }
     }
 
-    if (0 != ensure_path_mounted(path)) {
-        ui_print("Error mounting %s!\n", path);
-        ui_print("Skipping format...\n");
-        return -1;
-    }
-
-	int rc;
-    char tmp[PATH_MAX];
+	int rc;    
     if (strcmp(path, "/data") == 0 && is_data_media() && is_data_media_preserved()) {
-        if (ensure_path_mounted("/data") == 0) {
             // Preserve .layout_version to avoid "nesting bug"
             LOGI("Preserving layout version\n");
             unsigned char layout_buf[256];
@@ -820,8 +852,8 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
                 close(fd);
             }
 
-            rc = rmtree_except("/data", "media");
-
+			rc = rmtree_except("/data", "media");
+			
             // Restore .layout_version
             if (layout_buflen > 0) {
                 LOGI("Restoring layout version\n");
@@ -831,13 +863,39 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
                     close(fd);
                 }
             }
-        }
-        else {
-            LOGE("format_volume failed to mount /data\n");
-            return -1;
-        }
+            return rc;
+#ifdef USE_ADOPTED_STORAGE        
+    } else if (strcmp(path, "/data_sd") == 0 && has_adopted_storage()) {
+            // Preserve .layout_version to avoid "nesting bug"
+            LOGI("Preserving layout version\n");
+            unsigned char layout_buf[256];
+            ssize_t layout_buflen = -1;
+            int fd;
+            char tmp[PATH_MAX];
+            mkdir("ctrtemp", 0755);
+            fd = open("/data_sd/.layout_version", O_RDONLY);
+            if (fd != -1) {
+                layout_buflen = read(fd, layout_buf, sizeof(layout_buf));
+                close(fd);
+            }
+
+            rc = rmtree_except("/data_sd", "media");
+
+            // Restore .layout_version
+            if (layout_buflen > 0) {
+                LOGI("Restoring layout version\n");
+                fd = open("/data_sd/.layout_version", O_WRONLY | O_CREAT | O_EXCL, 0600);
+                if (fd != -1) {
+                    write(fd, layout_buf, layout_buflen);
+                    close(fd);
+                }
+            }
+            return rc;
+#endif        
     } else {
         rc = rmtree_except(path, NULL);
+        ensure_path_unmounted(path);
+		return rc;
     }
 
     ensure_path_unmounted(path);
@@ -852,7 +910,7 @@ int format_unknown_device(const char *device, const char* path, const char *fs_t
 /* 
  * Based on this post from xda by Lekensteyn: http://forum.xda-developers.com/showpost.php?s=2153acd5f8ca815af740d79c2d670d5d&p=47807114&postcount=2 
  */
-static int encryption_state = 0;
+
 void set_encryption_state(int val) {
     encryption_state = val;
 }
@@ -862,47 +920,173 @@ int is_encrypted_data() {
 }
 
 #ifdef BOARD_INCLUDE_CRYPTO
+
+int mount_encrypted_data() {
+	char tmp[PATH_MAX];
+	sprintf(tmp, "mount /dev/block/dm-0 /data");
+	sleep(1);
+	return __system(tmp);
+}
+	
 #define DEFAULT_HEX_PASSWORD "64656661756c745f70617373776f7264"
 #define DEFAULT_PASSWORD "default_password"
 int setup_encrypted_data() {
 	char crypto_state[PROPERTY_VALUE_MAX];
 	char crypto_passwd[PROPERTY_VALUE_MAX];
 	char cmd[PATH_MAX];
-	char tmp[PATH_MAX];
+	int ret = -1;	
 	
-	property_get("ro.crypto.state", crypto_state, "error");
-	if (strcmp(crypto_state, "error") == 0) {
-			property_set("ro.crypto.state", "encrypted");
-			sleep(1);
-	}
-
-	property_get("ro.ctr.crypto.passwd", crypto_passwd, "error");
-	if (strcmp(crypto_passwd, "error") == 0) {
-			sprintf(cmd, "/sbin/vdc cryptfs checkpw %s", DEFAULT_PASSWORD);
-			sleep(1);
-			if (0 == __system(cmd)) {
-				sprintf(cmd, "/sbin/vdc cryptfs checkpw %s", DEFAULT_HEX_PASSWORD);
+	if (!data_is_decrypted) {
+		property_get("ro.crypto.state", crypto_state, "error");
+		if (strcmp(crypto_state, "error") == 0) {
+				property_set("ro.crypto.state", "encrypted");
 				sleep(1);
-			}			
-	} else {
-		sprintf(cmd, "/sbin/vdc cryptfs checkpw %s", crypto_passwd);
-		sleep(1);
-	}
+		}
+	
+		property_get("ro.ctr.crypto.passwd", crypto_passwd, "error");
+		if (strcmp(crypto_passwd, "error") == 0) {
+				sprintf(cmd, "vdc cryptfs checkpw %s", DEFAULT_PASSWORD);
+				sleep(1);
+				if (0 != __system(cmd)) {
+					sprintf(cmd, "vdc cryptfs checkpw %s", DEFAULT_HEX_PASSWORD);
+					sleep(1);
+				}			
+		} else {
+			sprintf(cmd, "vdc cryptfs checkpw %s", crypto_passwd);
+			sleep(1);
+		}
 
-	if (0 == __system(cmd)) {
-		sprintf(tmp, "/sbin/mount /dev/block/dm-0 /data");
-		sleep(1);
-		if (is_data_media()) setup_data_media();
+		if (0 == __system(cmd)) {
+			ret = mount_encrypted_data();		
+		}
+	} else {
+		ret = mount_encrypted_data();
+	}
+		
+	if (ret == 0) {
+		ui_print("[*] Data successfuly decrypted and mounted!\n");
+		if (!data_is_decrypted) { 
+			data_is_decrypted = 1; 
+		}
+		encrypted_data_mounted = 1;
+		return 0;
 	}
 	
-	if (0 == __system(tmp)) {
-		ui_print("Data successfuly decrypted and mounted!\n");
-		return 0;
-	} else {
-		ui_print("Data couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
-		return 1;
-	}	
+	ui_print("[!] Data couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
+	return 1;	
 }
+
 #endif
 
+int has_adopted_storage() {
+    Volume *v = volume_for_path("/data_sd");
+    if (v == NULL)
+        return 0;
+    return strcmp(v->fs_options, "adopted") == 0;
+}
+
+#ifdef USE_ADOPTED_STORAGE
+
+static char* adopted_storage_key = NULL;
+
+char* get_adopted_storage_key(char* filename) {
+	char tmp[16];
+    char hex[33];
+    char buf[PATH_MAX] = "";
+	if (adopted_storage_key == NULL) {
+		snprintf(buf, sizeof(buf), "%s", filename);
+		FILE* f;
+		if (buf == NULL) {
+	        return NULL;
+	    }
+	
+	    f = fopen(buf, "rb");
+		if (f == NULL) {
+			return NULL;
+		}
+		
+	    bzero(tmp, 16);
+	    fread(tmp, 16, 1, f);
+	    int i;
+		unsigned char *p = (unsigned char *)tmp;
+		for (i = 0; i < 16; i++) {
+			sprintf(&hex[i*2],"%02x", p[i]);
+			sprintf(hex,"%s", hex);
+			adopted_storage_key = hex;
+		}    
+	    fclose(f);
+	}   
+    return adopted_storage_key;
+}
+
+int mount_adopted_storage() {
+	char tmp[PATH_MAX];
+	if (is_encrypted_data()) 
+			sprintf(tmp, "mount /dev/block/dm-1 /data_sd");
+	else 
+		sprintf(tmp, "mount /dev/block/dm-0 /data_sd");
+	sleep(1);
+	return __system(tmp);
+}
+
+int setup_adopted_storage() {
+    char cmd[1024];
+    char buf[1024];
+    char file[256];
+    char sz[1024];
+    char* adopted_key = "";
+    char *p;
+    int ret = -1;
+    if (!adopted_storage_decrypted) {	    
+	    sprintf(file, "find /data/misc/vold -name '*.key'");
+	
+	    FILE *fp = __popen(file, "r");
+	    if (fp == NULL) {
+	        return -1;
+	    }
+	    fgets(file, sizeof(file), fp);
+			if ((p = strchr(file, '\n')) != NULL) {
+		      *p = '\0';
+		    }
+			adopted_key = get_adopted_storage_key(file);		   
+	    __pclose(fp);
+
+	    sprintf(sz, "blockdev --getsz /dev/block/mmcblk1p2");
+	
+	    FILE *fz = __popen(sz, "r");
+	    if (fz == NULL) {
+	        return -1;
+	    }
+	    fgets(sz, sizeof(sz), fz);
+			if ((p = strchr(sz, '\n')) != NULL) {
+		      *p = '\0';
+		    }		    
+	    __pclose(fz);
+	    
+	    sprintf(buf, "\"0 %s crypt aes-cbc-essiv:sha256 %s 0 /dev/block/mmcblk1p2 0\"", sz, adopted_key);
+	    if (is_encrypted_data()) 
+			snprintf(cmd, sizeof(cmd), "/sbin/dms create dm-1 --table %s", buf);
+		else 
+			snprintf(cmd, sizeof(cmd), "/sbin/dms create dm-0 --table %s", buf);
+		sleep(1);
+		if (0 == __system(cmd)) {
+			ret = mount_adopted_storage();
+		}
+	} else {
+		ret = mount_adopted_storage();
+	}
+		
+	if (ret == 0) {
+		ui_print("[*] Adopted storage successfuly mounted (data_sd)!\n");
+		if (!adopted_storage_decrypted) { 
+			adopted_storage_decrypted = 1; 
+		}
+		adopted_storage_mounted = 1;
+		return 0;
+	}
+	
+	ui_print("[!] Adopted Storage couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
+	return 1;	
+}
+#endif
 /*******************************/
