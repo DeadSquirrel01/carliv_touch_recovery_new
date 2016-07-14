@@ -205,7 +205,7 @@ static void compute_directory_stats(const char* directory) {
 }
 
 void finish_nandroid_job() {
-    ui_print("Finalizing, please wait...\n");
+    ui_print("[*] Finalizing, please wait...\n");
     sync();
         ui_set_background(BACKGROUND_ICON_NONE);
 
@@ -218,7 +218,7 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
 
     if (*nand_starts) {
         ui_clear_key_queue();
-        ui_print("\nPress Power to cancel.\n \n \n");
+        ui_print("\n[>] Press Power to cancel.\n \n \n");
         *nand_starts = 0;
     }
 
@@ -227,7 +227,7 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
 
         // support cancel nandroid job
         if (key_event == SELECT_ITEM) {
-            ui_print("\nReally cancel? (press Power)\n");
+            ui_print("\n[!] Really cancel? (press Power)\n");
             is_time_interval_passed(0);
             ui_clear_key_queue();
             while (!is_time_interval_passed(5000)) {
@@ -241,13 +241,13 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
                 return 0;
             }
 
-            ui_print("Cancelling, please wait...\n");
+            ui_print("[*] Cancelling, please wait...\n");
             ui_clear_key_queue();
             __pclose(*fp);
             nandroid_canceled = 1;
             if (is_backup) {
                 char cmd[PATH_MAX];
-                ui_print("Deleting backup...\n");
+                ui_print("[*] Deleting backup...\n");
                 sync(); // before deleting backup folder
                 sprintf(cmd, "rm -rf '%s'", dirname(backup_file_image));
                 __system(cmd);
@@ -255,7 +255,7 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
 
             finish_nandroid_job();
             if (!is_backup) {
-                ui_print("\nPartition was left corrupted after cancel command!\n");
+                ui_print("\n[!] Partition was left corrupted after cancel command!\n");
             }
 
             return 1;
@@ -438,7 +438,7 @@ static int nandroid_backup_partition_extended(const char* backup_path, const cha
     nandroid_backup_handler backup_handler = get_backup_handler(mount_point);
 
     if (backup_handler == NULL) {
-        ui_print("Error finding an appropriate backup handler.\n");
+        ui_print("[!] Error finding an appropriate backup handler.\n");
         return -2;
     }
     ret = backup_handler(mount_point, tmp, callback);
@@ -446,10 +446,10 @@ static int nandroid_backup_partition_extended(const char* backup_path, const cha
         ensure_path_unmounted(mount_point);
     }
     if (0 != ret) {
-        ui_print("Error while making a backup image of %s!\n", mount_point);
+        ui_print("[!] Error while making a backup image of %s!\n", mount_point);
         return ret;
     }
-    ui_print("Backup of %s completed.\n", name);
+    ui_print("[*] Backup of %s completed.\n", name);
     return 0;
 }
 
@@ -471,14 +471,14 @@ static int nandroid_backup_partition(const char* backup_path, const char* root) 
             strcpy(tmp, "/proc/self/fd/1");
         else
             sprintf(tmp, "%s/%s.img", backup_path, name);
-        ui_print("[*] Backing up %s image...\n", name);
+        //ui_print("[*] Backing up %s image...\n", name);
 
         if (0 != (ret = backup_raw_partition(vol->fs_type, vol->device, tmp))) {
-            ui_print("Error while backing up %s image!\n", name);
+            ui_print("[!] Error while backing up %s image!\n", name);
             return ret;
         }
 
-        ui_print("Backup of %s image completed.\n", name);
+        ui_print("[*] Backup of %s image completed.\n", name);
         return 0;
     }
 
@@ -557,9 +557,7 @@ int nandroid_backup(const char* backup_path) {
             return print_and_error(NULL, ret);
     }
 
-    if (0 != stat(get_android_secure_path(), &s)) {
-        ui_print("No .android_secure found. Skipping backup of applications on external storage.\n");
-    } else {
+    if (0 == stat(get_android_secure_path(), &s)) {
         if (0 != (ret = nandroid_backup_partition_extended(backup_path, get_android_secure_path(), 0)))
             return print_and_error(NULL, ret);
     }
@@ -625,6 +623,7 @@ int nandroid_advanced_backup(const char* backup_path, int boot, int system, int 
         volume = volume_for_path("/data");
     int ret;
     struct statfs sfs;
+    struct stat s;
     if (NULL != volume) {
         if (0 != (ret = statfs(volume->mount_point, &sfs)))
             return print_and_error("Unable to stat backup path.\n", NANDROID_ERROR_GENERAL);
@@ -664,8 +663,10 @@ int nandroid_advanced_backup(const char* backup_path, int boot, int system, int 
             return print_and_error(NULL, ret);
     }
     
-    if (data && 0 != (ret = nandroid_backup_partition_extended(backup_path, get_android_secure_path(), 0)))
-		return print_and_error(NULL, ret);
+    if (data && 0 == stat(get_android_secure_path(), &s)) {
+        if (0 != (ret = nandroid_backup_partition_extended(backup_path, get_android_secure_path(), 0)))
+            return print_and_error(NULL, ret);
+    }
 
     if (cache && 0 != (ret = nandroid_backup_partition_extended(backup_path, "/cache", 0)))
         return print_and_error(NULL, ret);
@@ -1133,9 +1134,11 @@ int nandroid_restore(const char* backup_path, int restore_boot, int restore_syst
         if (restore_data && 0 != (ret = nandroid_restore_partition(backup_path, "/datadata")))
             return print_and_error(NULL, ret);
     }
-
-    if (restore_data && 0 != (ret = nandroid_restore_partition_extended(backup_path, get_android_secure_path(), 0)))
-		return print_and_error(NULL, ret);
+    
+    if (restore_data && 0 == stat(get_android_secure_path(), &s)) {
+        if (0 != (ret = nandroid_restore_partition_extended(backup_path, get_android_secure_path(), 0)))
+			return print_and_error(NULL, ret);
+    }
 
     if (restore_cache && 0 != (ret = nandroid_restore_partition_extended(backup_path, "/cache", 0)))
         return print_and_error(NULL, ret);
@@ -1175,6 +1178,7 @@ int nandroid_advanced_restore(const char* backup_path, int boot, int system, int
 
     int ret;
 	struct stat stb;
+	struct stat s;
 	sprintf(tmp, "%s/boot.img", backup_path);
 
     if (boot && (stat(tmp, &stb) == 0)) {
@@ -1202,9 +1206,11 @@ int nandroid_advanced_restore(const char* backup_path, int boot, int system, int
         if (0 != (ret = nandroid_restore_partition(backup_path, "/datadata")))
             return print_and_error(NULL, ret);
     }
-
-    if (data && 0 != (ret = nandroid_restore_partition_extended(backup_path, get_android_secure_path(), 0)))
-		return print_and_error(NULL, ret);
+    
+    if (data && 0 == stat(get_android_secure_path(), &s)) {
+        if (0 != (ret = nandroid_restore_partition_extended(backup_path, get_android_secure_path(), 0)))
+			return print_and_error(NULL, ret);
+    }
 
     if (cache && 0 != (ret = nandroid_restore_partition_extended(backup_path, "/cache", 0)))
         return print_and_error(NULL, ret);

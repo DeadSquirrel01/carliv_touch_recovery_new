@@ -32,6 +32,7 @@ LOCAL_SRC_FILES := \
     bootloader.c \
     install.c \
     roots.c \
+    default_recovery_ui.c \
     ui.c \
     mtdutils/mounts.c \
     extendedcommands.c \
@@ -74,7 +75,7 @@ ifndef RECOVERY_NAME
 RECOVERY_NAME := CWM Based Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.7.1
+RECOVERY_VERSION := $(RECOVERY_NAME) v5.7.2
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -228,12 +229,6 @@ ifeq ($(BOARD_CUSTOM_RECOVERY_KEYMAPPING),)
   LOCAL_SRC_FILES += default_recovery_keys.c
 else
   LOCAL_SRC_FILES += $(BOARD_CUSTOM_RECOVERY_KEYMAPPING)
-endif
-
-ifeq ($(BOARD_CUSTOM_RECOVERY_UI),)
-  LOCAL_SRC_FILES += default_recovery_ui.c
-else
-  LOCAL_SRC_FILES += $(BOARD_CUSTOM_RECOVERY_UI)
 endif
 
 LOCAL_C_INCLUDES += system/extras/ext4_utils

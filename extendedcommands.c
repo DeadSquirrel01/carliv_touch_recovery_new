@@ -243,18 +243,17 @@ void show_install_update_menu() {
                                     NULL,
                                     NULL 
     };
-    
-    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
-        install_menu_items[5] = "Choose zip from USB-Drive";
-	}
+
 	if (num_extra_volumes != 0) {
 		if (extra_path != NULL) 
-			install_menu_items[6] = "Choose zip from ExtraSD";	
+			install_menu_items[5] = "Choose zip from ExtraSD";	
     }
+    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+        install_menu_items[6] = "Choose zip from USB-Drive";
+	}
     
-    for (;;)
-    {
-        int chosen_item = get_menu_selection(headers, install_menu_items, 0, 0);
+    for (;;) {
+        int chosen_item = get_filtered_menu_selection(headers, install_menu_items, 0, 0, sizeof(install_menu_items) / sizeof(char*));
         if (chosen_item == GO_BACK || chosen_item == REFRESH)
 			break;
         switch (chosen_item)
@@ -281,10 +280,10 @@ void show_install_update_menu() {
                 toggle_signature_check();
                 break;
             case 5:
-                show_choose_zip_menu(usb_path);
+                show_choose_zip_menu(extra_path);
                 break;
             case 6:
-                show_choose_zip_menu(extra_path);
+                show_choose_zip_menu(usb_path);
                 break;
             default:
                 return;
@@ -304,11 +303,6 @@ void wipe_battery_stats(int confirm) {
     if (!is_encrypted_data()) ensure_path_unmounted("/data");
 }
 
-#define WIPE_ALL_DATA	    0
-#define WIPE_CACHE          1
-#define WIPE_DALVIK_CACHE	2
-#define WIPE_PREFLASH   	3
-
 void show_wipe_menu() {
 
     const char* headers[] = { "Wipe Menu", NULL };
@@ -320,23 +314,23 @@ void show_wipe_menu() {
 						   NULL };
 
 	for (;;) {
-		int chosen_item = get_menu_selection(headers, wipe_items, 0, 0);
+		int chosen_item = get_filtered_menu_selection(headers, wipe_items, 0, 0, sizeof(wipe_items) / sizeof(char*));
 		if (chosen_item == GO_BACK || chosen_item == REFRESH)
 			break;
 		switch (chosen_item) {
-		  case WIPE_ALL_DATA:
+		  case 0:
 			wipe_data(ui_text_visible());
 			if (!ui_text_visible()) return;
 			break;
-		  case WIPE_CACHE:
+		  case 1:
 			wipe_cache(ui_text_visible());
 			if (!ui_text_visible()) return;
 			break;
-		  case WIPE_DALVIK_CACHE:
+		  case 2:
 			wipe_dalvik_cache(ui_text_visible());
 			if (!ui_text_visible()) return;
 			break;
-		  case WIPE_PREFLASH:
+		  case 3:
 			wipe_preflash(ui_text_visible());
 			if (!ui_text_visible()) return;
 			break;
@@ -831,10 +825,13 @@ int control_usb_storage_for_lun(Volume* vol, bool enable) {
 #ifdef TARGET_USE_CUSTOM_LUN_FILE_PATH
         TARGET_USE_CUSTOM_LUN_FILE_PATH,
 #endif
-        "/sys/devices/platform/usb_mass_storage/lun%d/file",
+        "/sys/class/android_usb/android0/f_mass_storage/lun0/file",
         "/sys/class/android_usb/android0/f_mass_storage/lun/file",
-        "/sys/class/android_usb/android0/f_mass_storage/lun1/file",
+        "/sys/class/android_usb/android%d/f_mass_storage/lun/file",
         "/sys/class/android_usb/android0/f_mass_storage/lun_ex/file",
+        "/sys/devices/platform/usb_mass_storage/lun%d/file",
+        "/sys/devices/platform/msm_hsusb/gadget/lun0/file",
+        "/sys/devices/virtual/android_usb/android0/f_mass_storage/lun",
         NULL
     };
 
@@ -999,7 +996,7 @@ typedef struct {
 } FormatMenuEntry;
 
 static int is_safe_to_format(const char* name) {
-    char str[256];    
+    char str[512];    
     char* partition;
     property_get("ro.ctr.forbid_format", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
 
@@ -1017,7 +1014,7 @@ static int is_safe_to_format(const char* name) {
 }
 
 static int is_allowed_to_mount(const char* name) {
-    char str[256];
+    char str[512];
     char* partition;
     property_get("ro.ctr.forbid_mount", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
 
@@ -1160,17 +1157,11 @@ void show_partition_menu() {
             MountMenuEntry* e = &mount_menu[chosen_item];
             Volume* v = e->v;
 
-            if (strstr(v->mount_point, "/data") == v->mount_point && is_encrypted_data() && is_path_mounted(v->mount_point)) {
-				preserve_data_media(1);
-                ui_print("Encrypted data has to remain always mounted, except when formating!\n");
-            } else if (strstr(v->mount_point, "/data") == v->mount_point && is_path_mounted(v->mount_point) && !is_encrypted_data()) {
+            if (is_path_mounted(v->mount_point)) {
 				preserve_data_media(0);
                 if (0 != ensure_path_unmounted(v->mount_point))
                     ui_print("Error unmounting %s!\n", v->mount_point);
                 preserve_data_media(1);
-            } else if (strstr(v->mount_point, "/data") != v->mount_point && is_path_mounted(v->mount_point)) {
-                if (0 != ensure_path_unmounted(v->mount_point))
-                    ui_print("Error unmounting %s!\n", v->mount_point);
             } else {
                 if (0 != ensure_path_mounted(v->mount_point))
                     ui_print("Error mounting %s!\n",  v->mount_point);
@@ -2009,8 +2000,9 @@ static void show_flash_image_menu() {
 	    if (extra_path != NULL)
 	        list[1] = "ExtraSD";
 	}
-    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0)
+    if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
         list[2] = "USB-Drive";
+	}
 
     for (;;) {
         int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
@@ -2251,7 +2243,9 @@ static void choose_aromafm_menu(const char* aromafm_path) {
     static char confirm[PATH_MAX];
     sprintf(confirm, "Yes - Run %s", basename(aroma_file));
     if (confirm_selection(confirm_install, confirm)) {
+        ui_show_text(0);
         install_zip(aroma_file);
+        ui_show_text(1);
     }
 }
 
@@ -2274,8 +2268,9 @@ static void custom_aroma_menu() {
 	    if (extra_path != NULL)
 	        list[1] = "Search ExtraSD";
 	}
-	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0)
+	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
         list[2] = "Search USB-Drive";
+	}
 
     for (;;) {
         //header function so that "Toggle menu" doesn't reset to main menu on action selected
@@ -2306,7 +2301,9 @@ static int default_aromafm(const char* aromafm_path) {
     sprintf(aroma_file, "%s/clockworkmod/.aromafm/aromafm.zip", aromafm_path);
 
     if (access(aroma_file, F_OK) != -1) {
+        ui_show_text(0);
         install_zip(aroma_file);
+        ui_show_text(1);
         return 1;
     } 
 	return 0;
@@ -2551,12 +2548,31 @@ static int bml_check_volume(const char *path) {
     return ret == 0 ? 1 : 0;
 }
 
+int has_datadata() {
+    Volume *vol = volume_for_path("/datadata");
+    if (vol == NULL) {
+        return 0;
+    }
+    return 1;
+}
+
 void process_volumes() {
     create_fstab();
-
-	if (!is_encrypted_data()) {
-	    if (is_data_media()) setup_data_media();
-	}
+   
+#ifdef BOARD_INCLUDE_CRYPTO
+	if (ensure_path_mounted("/data") != 0) {
+		ui_set_background(BACKGROUND_ICON_INSTALLING);
+		encrypted_data_mounted = 0;
+		set_encryption_state(1);
+		setup_encrypted_data();
+	} else {
+		set_encryption_state(0);
+		if (is_data_media()) setup_data_media();
+	}	
+#else
+	set_encryption_state(0);
+	if (is_data_media()) setup_data_media();	
+#endif
     return;
 }
 
@@ -2595,11 +2611,6 @@ int is_path_mounted(const char* path) {
         return 1;
     }
     return 0;
-}
-
-int has_datadata() {
-    Volume *vol = volume_for_path("/datadata");
-    return vol != NULL;
 }
 
 int volume_main(int argc, char **argv) {
