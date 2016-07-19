@@ -389,6 +389,7 @@ really_install_package(const char *path, int* wipe_cache, bool needs_mount)
 
 out:
     set_perf_mode(0);
+    ui_set_background(BACKGROUND_ICON_NONE);
     return ret;
 }
 
