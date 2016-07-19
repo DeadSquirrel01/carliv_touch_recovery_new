@@ -658,11 +658,39 @@ int cmd_mmc_backup_raw_partition(const char *partition, const char *filename)
             printf("Uboot: %s (%u)\n", partition, sz);
         }
 
+        if (strstr(partition, "/lk") != NULL) {
+            if (mtk_p_size("/lk") != 0)
+                return -1;
+            sz = (unsigned)mtk_size;
+            printf("Uboot: %s (%u)\n", partition, sz);
+        }
+
         if (strstr(partition, "/logo") != NULL) {
             if (mtk_p_size("/logo") != 0)
                 return -1;
             sz = (unsigned)mtk_size;
             printf("Logo: %s (%u)\n", partition, sz);
+        }
+
+        if (strstr(partition, "/nvram") != NULL) {
+            if (mtk_p_size("/nvram") != 0)
+                return -1;
+            sz = (unsigned)mtk_size;
+            printf("Nvram: %s (%u)\n", partition, sz);
+        }
+
+        if (strstr(partition, "/sec_ro") != NULL) {
+            if (mtk_p_size("/sec_ro") != 0)
+                return -1;
+            sz = (unsigned)mtk_size;
+            printf("Secro: %s (%u)\n", partition, sz);
+        }
+
+        if (strstr(partition, "/secro") != NULL) {
+            if (mtk_p_size("/secro") != 0)
+                return -1;
+            sz = (unsigned)mtk_size;
+            printf("Secro: %s (%u)\n", partition, sz);
         }
 #endif
 #endif
