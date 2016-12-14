@@ -154,24 +154,34 @@ static int print_and_error(const char* message, int ret) {
     return ret;
 }
 
-static void nandroid_callback(const char* filename) {
+static int ui_nice = 0;
+static int ui_niced = 0;
+
+int ui_was_niced() {
+    return ui_niced;
+}
+
+void ui_set_nice(int enabled) {
+    ui_nice = enabled;
+}
+
+static void nandroid_callback(const char* filename)
+{
     if (filename == NULL)
         return;
-
+    const char* justfile = basename(filename);
     char tmp[PATH_MAX];
-    ui_set_log_stdout(0);
-    strcpy(tmp, filename);
+    strcpy(tmp, justfile);
     if (tmp[strlen(tmp) - 1] == '\n')
         tmp[strlen(tmp) - 1] = '\0';
-    LOGI("%s\n", tmp);
-
-    if (nandroid_files_total != 0) {
-        nandroid_files_count++;
-        float progress_decimal = (float)((double)nandroid_files_count /
-                                         (double)nandroid_files_total);
-        ui_set_progress(progress_decimal);
-    }
-    ui_set_log_stdout(1);
+    tmp[ui_get_text_cols() - 1] = '\0';
+    nandroid_files_count++;
+    ui_increment_frame();
+    ui_nice_print("%s\n", tmp);
+    if (!ui_was_niced() && nandroid_files_total != 0)
+        ui_set_progress((float)nandroid_files_count / (float)nandroid_files_total);
+    if (!ui_was_niced())
+        ui_delete_line();
 }
 
 static void compute_directory_stats(const char* directory) {
@@ -205,7 +215,7 @@ static void compute_directory_stats(const char* directory) {
 }
 
 void finish_nandroid_job() {
-    ui_print("[*] Finalizing, please wait...\n");
+    ui_print("Finalizing, please wait...\n");
     sync();
         ui_set_background(BACKGROUND_ICON_NONE);
 
@@ -227,7 +237,7 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
 
         // support cancel nandroid job
         if (key_event == SELECT_ITEM) {
-            ui_print("\n[!] Really cancel? (press Power)\n");
+            ui_print("\nReally cancel? (press Power)\n");
             is_time_interval_passed(0);
             ui_clear_key_queue();
             while (!is_time_interval_passed(5000)) {
@@ -241,13 +251,13 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
                 return 0;
             }
 
-            ui_print("[*] Cancelling, please wait...\n");
+            ui_print("Cancelling, please wait...\n");
             ui_clear_key_queue();
             __pclose(*fp);
             nandroid_canceled = 1;
             if (is_backup) {
                 char cmd[PATH_MAX];
-                ui_print("[*] Deleting backup...\n");
+                ui_print("Deleting backup...\n");
                 sync(); // before deleting backup folder
                 sprintf(cmd, "rm -rf '%s'", dirname(backup_file_image));
                 __system(cmd);
@@ -255,7 +265,7 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
 
             finish_nandroid_job();
             if (!is_backup) {
-                ui_print("\n[!] Partition was left corrupted after cancel command!\n");
+                ui_print("\nPartition was left corrupted after cancel command!\n");
             }
 
             return 1;
@@ -417,7 +427,7 @@ static int nandroid_backup_partition_extended(const char* backup_path, const cha
     ensure_path_mounted(tmp);
     int callback = stat(tmp, &file_info) != 0;
 
-    ui_print("\n[*] Backing up %s...\n", name);
+    ui_print("\nBacking up %s...\n", name);
     if (0 != (ret = ensure_path_mounted(mount_point) != 0)) {
         ui_print("Can't mount %s!\n", mount_point);
         return ret;
@@ -438,7 +448,7 @@ static int nandroid_backup_partition_extended(const char* backup_path, const cha
     nandroid_backup_handler backup_handler = get_backup_handler(mount_point);
 
     if (backup_handler == NULL) {
-        ui_print("[!] Error finding an appropriate backup handler.\n");
+        ui_print("Error finding an appropriate backup handler.\n");
         return -2;
     }
     ret = backup_handler(mount_point, tmp, callback);
@@ -446,10 +456,10 @@ static int nandroid_backup_partition_extended(const char* backup_path, const cha
         ensure_path_unmounted(mount_point);
     }
     if (0 != ret) {
-        ui_print("[!] Error while making a backup image of %s!\n", mount_point);
+        ui_print("Error while making a backup image of %s!\n", mount_point);
         return ret;
     }
-    ui_print("[*] Backup of %s completed.\n", name);
+    ui_print("Backup of %s completed.\n", name);
     return 0;
 }
 
@@ -465,20 +475,20 @@ static int nandroid_backup_partition(const char* backup_path, const char* root) 
     if (strcmp(vol->fs_type, "mtd") == 0 ||
             strcmp(vol->fs_type, "bml") == 0 ||
             strcmp(vol->fs_type, "emmc") == 0) {
-        ui_print("\n[*] Backing up %s...\n", root);
+        ui_print("\nBacking up %s...\n", root);
         const char* name = basename(root);
         if (strcmp(backup_path, "-") == 0)
             strcpy(tmp, "/proc/self/fd/1");
         else
             sprintf(tmp, "%s/%s.img", backup_path, name);
-        //ui_print("[*] Backing up %s image...\n", name);
+        //ui_print("Backing up %s image...\n", name);
 
         if (0 != (ret = backup_raw_partition(vol->fs_type, vol->device, tmp))) {
-            ui_print("[!] Error while backing up %s image!\n", name);
+            ui_print("Error while backing up %s image!\n", name);
             return ret;
         }
 
-        ui_print("[*] Backup of %s image completed.\n", name);
+        ui_print("Backup of %s image completed.\n", name);
         return 0;
     }
 
@@ -527,7 +537,7 @@ int nandroid_backup(const char* backup_path) {
     Volume *vol = volume_for_path("/wimax");
     if (vol != NULL && 0 == stat(vol->device, &s)) {
         char serialno[PROPERTY_VALUE_MAX];
-        ui_print("[*] Backing up WiMAX...\n");
+        ui_print("Backing up WiMAX...\n");
         serialno[0] = 0;
         property_get("ro.serialno", serialno, "");
         sprintf(tmp, "%s/wimax.%s.img", backup_path, serialno);
@@ -918,7 +928,7 @@ static int nandroid_restore_partition_extended(const char* backup_path, const ch
     if (vol != NULL)
         device = vol->device;
 
-    ui_print("\n[*] Restoring %s...\n", mount_point);
+    ui_print("\nRestoring %s...\n", mount_point);
     char tmp[PATH_MAX];
     sprintf(tmp, "%s/%s.img", backup_path, name);
     struct stat file_info;
@@ -981,7 +991,7 @@ static int nandroid_restore_partition_extended(const char* backup_path, const ch
     ensure_path_mounted(path);
     int callback = stat(path, &file_info) != 0;
 
-    ui_print("[*] Restoring %s...\n", name);
+    ui_print("Restoring %s...\n", name);
     if (backup_filesystem == NULL) {
         if (0 != (ret = format_volume(mount_point))) {
             ui_print("Error while formatting %s!\n", mount_point);
@@ -1033,7 +1043,7 @@ static int nandroid_restore_partition(const char* backup_path, const char* root)
     if (strcmp(vol->fs_type, "mtd") == 0 ||
             strcmp(vol->fs_type, "bml") == 0 ||
             strcmp(vol->fs_type, "emmc") == 0) {
-		ui_print("\n[*] Restoring %s...\nUsing raw mode...\n", root);
+		ui_print("\nRestoring %s...\nUsing raw mode...\n", root);
         int ret;
         const char* name = basename(root);
         
@@ -1048,13 +1058,13 @@ static int nandroid_restore_partition(const char* backup_path, const char* root)
             return 0;
         }
         
-        ui_print("[*] Erasing %s before restore...\n", name);
+        ui_print("Erasing %s before restore...\n", name);
         if (0 != (ret = format_volume(root))) {
             ui_print("Error while erasing %s image!", name);
             return ret;
         }
 
-        ui_print("[*] Restoring %s image...\n", name);
+        ui_print("Restoring %s image...\n", name);
         if (0 != (ret = restore_raw_partition(vol->fs_type, vol->device, tmp))) {
             ui_print("Error while flashing %s image!", name);
             return ret;
@@ -1105,10 +1115,10 @@ int nandroid_restore(const char* backup_path, int restore_boot, int restore_syst
             ui_print("         You should create a new backup to\n");
             ui_print("         protect your WiMAX keys.\n");
         } else {
-            ui_print("[*] Erasing WiMAX before restore...\n");
+            ui_print("Erasing WiMAX before restore...\n");
             if (0 != (ret = format_volume("/wimax")))
                 return print_and_error("Error while formatting wimax!\n", NANDROID_ERROR_GENERAL);
-            ui_print("[*] Restoring WiMAX image...\n");
+            ui_print("Restoring WiMAX image...\n");
             if (0 != (ret = restore_raw_partition(vol->fs_type, vol->device, tmp)))
                 return print_and_error(NULL, ret);
         }
