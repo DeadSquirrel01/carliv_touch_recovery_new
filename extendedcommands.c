@@ -234,11 +234,11 @@ void show_install_update_menu() {
     
     const char* headers[] = { "Install from zip file", NULL };
     
-    char* install_menu_items[] = {  "Choose zip from Sdcard",
-                                    "Install zip from sideload",
-                                    "Choose from last install folder",
-                                    "Multi-zip Installer",
-                                    "Toggle Signature Verification",
+    char* install_menu_items[] = {  "choose zip from sdcard",
+                                    "install zip from sideload",
+                                    "choose from last install folder",
+                                    "multi-zip installer",
+                                    "toggle signature verification",
                                     NULL,
                                     NULL,
                                     NULL 
@@ -246,10 +246,10 @@ void show_install_update_menu() {
 
 	if (num_extra_volumes != 0) {
 		if (extra_path != NULL) 
-			install_menu_items[5] = "Choose zip from ExtraSD";	
+			install_menu_items[5] = "choose zip from extrasd";	
     }
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
-        install_menu_items[6] = "Choose zip from USB-Drive";
+        install_menu_items[6] = "choose zip from usb-drive";
 	}
     
     for (;;) {
@@ -292,25 +292,14 @@ void show_install_update_menu() {
     }
 }
 
-void wipe_battery_stats(int confirm) {
-	if (confirm && !confirm_selection( "Confirm reset battery stats?", "Yes - Reset battery stats"))
-        return;
-	if (!is_encrypted_data()) ensure_path_mounted("/data");
-    device_wipe_battery_stats();
-    ui_print("\n-- Resetting battery stats...\n");
-    __system("rm -f /data/system/batterystats.bin");
-	ui_print("Battery stats resetted.\n");
-    if (!is_encrypted_data()) ensure_path_unmounted("/data");
-}
-
 void show_wipe_menu() {
 
-    const char* headers[] = { "Wipe Menu", NULL };
+    const char* headers[] = { "Wipe partitions", NULL };
     
-	char* wipe_items[] = { "Wipe Data - Factory Reset",
-						   "Wipe Cache",
-						   "Wipe Dalvik Cache",
-						   "Wipe ALL - Preflash",
+	char* wipe_items[] = { "wipe data - factory reset",
+						   "wipe cache",
+						   "wipe dalvik cache",
+						   "wipe all - preflash",
 						   NULL };
 
 	for (;;) {
@@ -583,10 +572,10 @@ void show_multi_flash_menu() {
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
     
-    const char* headers_dir[] = { "Choose a set of zip files",
+    const char* headers_dir[] = { "choose a set of zip files",
                                    NULL
     };
-    const char* headers[] = {  "Select files to install...",
+    const char* headers[] = {  "select files to install...",
                                 NULL
     };
     
@@ -904,13 +893,13 @@ void show_mount_usb_storage_menu() {
     if (control_usb_storage(volumes, 1))
         return;
 
-    const char* headers[] = { "USB Mass Storage device",
+    const char* headers[] = { "USB mass storage device",
 							 "Leaving this menu unmounts",
-							 "your SD card from your PC.",
+							 "your sd card from your pc",
 							 NULL
     };
 
-    static char* list[] = { "Unmount", NULL };
+    static char* list[] = { "unmount", NULL };
 
     for (;;) {
         int chosen_item = get_menu_selection(headers, list, 0, 0);
@@ -1030,7 +1019,7 @@ static int is_allowed_to_mount(const char* name) {
 }
 
 void show_partition_menu() {
-    const char* headers[] = { "Mounts and Storage Menu", NULL };
+    const char* headers[] = { "mounts and storage", NULL };
 
     static MountMenuEntry* mount_menu = NULL;
     static FormatMenuEntry* format_menu = NULL;
@@ -1059,27 +1048,27 @@ void show_partition_menu() {
         Volume* v = &device_volumes[i];
         if(strcmp("ramdisk", v->fs_type) != 0 && strcmp("mtd", v->fs_type) != 0 && strcmp("emmc", v->fs_type) != 0 && strcmp("bml", v->fs_type) != 0 && is_allowed_to_mount(v->mount_point)) {
             if (strcmp("datamedia", v->fs_type) != 0) {
-                sprintf(mount_menu[mountable_volumes].mount, "Mount %s", v->mount_point);
-                sprintf(mount_menu[mountable_volumes].unmount, "Unmount %s", v->mount_point);
+                sprintf(mount_menu[mountable_volumes].mount, "mount %s", v->mount_point);
+                sprintf(mount_menu[mountable_volumes].unmount, "unmount %s", v->mount_point);
                 mount_menu[mountable_volumes].v = &device_volumes[i];
                 ++mountable_volumes;
             }
             if (is_safe_to_format(v->mount_point)) {
-                sprintf(format_menu[formatable_volumes].txt, "Format %s", v->mount_point);
+                sprintf(format_menu[formatable_volumes].txt, "format %s", v->mount_point);
                 format_menu[formatable_volumes].v = &device_volumes[i];
                 ++formatable_volumes;
             }
         }
         else if (strcmp("ramdisk", v->fs_type) != 0 && strcmp("mtd", v->fs_type) == 0 && is_safe_to_format(v->mount_point))
         {
-            sprintf(format_menu[formatable_volumes].txt, "Format %s", v->mount_point);
+            sprintf(format_menu[formatable_volumes].txt, "format %s", v->mount_point);
             format_menu[formatable_volumes].v = &device_volumes[i];
             ++formatable_volumes;
         }
     }
 
-    static char* confirm_format  = "Confirm format?";
-    static char* confirm = "Yes - Format";
+    static char* confirm_format  = "confirm format?";
+    static char* confirm = "yes - format";
     char confirm_string[255];
     char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
@@ -1104,14 +1093,14 @@ void show_partition_menu() {
         }
 
         if (!is_data_media()) {
-            options[mountable_volumes + formatable_volumes] = "Mount USB storage";
+            options[mountable_volumes + formatable_volumes] = "mount USB storage";
             options[mountable_volumes + formatable_volumes + 1] = NULL;
         } else if (is_data_media_volume_path(primary_path) && extra_path == NULL) {
-            options[mountable_volumes + formatable_volumes] = "Format /data and /data/media";
+            options[mountable_volumes + formatable_volumes] = "format /data and /data/media";
             options[mountable_volumes + formatable_volumes + 1] = NULL;
         } else {
-            options[mountable_volumes + formatable_volumes] = "Format /data and /data/media";
-            options[mountable_volumes + formatable_volumes + 1] = "Mount USB storage";
+            options[mountable_volumes + formatable_volumes] = "format /data and /data/media";
+            options[mountable_volumes + formatable_volumes + 1] = "mount USB storage";
             options[mountable_volumes + formatable_volumes + 2] = NULL;
         }
 
@@ -1122,29 +1111,29 @@ void show_partition_menu() {
             if (!is_data_media()) {
                 show_mount_usb_storage_menu();
             } else {
-                if (!confirm_selection("Format /data and /data/media", confirm))
+                if (!confirm_selection("format /data and /data/media", confirm))
                     continue;
                 if (is_encrypted_data()) {
 	                preserve_data_media(0);
 	                set_encryption_state(0);
 	                ensure_path_unmounted("/data");
-	                ui_print("Formatting /data...\n");
+	                ui_print("formatting /data...\n");
 	                if (0 != format_volume("/data"))
-	                    ui_print("Error formatting /data!\n");
+	                    ui_print("error formatting /data!\n");
 	                else
-	                    ui_print("Done.\n");
+	                    ui_print("done.\n");
 	                preserve_data_media(1);
-		            ui_print("Rebooting recovery...\n");
+		            ui_print("rebooting recovery...\n");
 		            sleep(1);
 					reboot_main_system(ANDROID_RB_RESTART2, 0, "recovery");
 				} else {
 					preserve_data_media(0);
 	                ensure_path_unmounted("/data");
-	                ui_print("Formatting /data...\n");
+	                ui_print("formatting /data...\n");
 	                if (0 != format_volume("/data"))
-	                    ui_print("Error formatting /data!\n");
+	                    ui_print("error formatting /data!\n");
 	                else
-	                    ui_print("Done.\n");
+	                    ui_print("done.\n");
 	                preserve_data_media(1);
 	                // recreate /data/media with proper permissions
 		            ensure_path_mounted("/data");
@@ -1160,11 +1149,11 @@ void show_partition_menu() {
             if (is_path_mounted(v->mount_point)) {
 				preserve_data_media(0);
                 if (0 != ensure_path_unmounted(v->mount_point))
-                    ui_print("Error unmounting %s!\n", v->mount_point);
+                    ui_print("error unmounting %s!\n", v->mount_point);
                 preserve_data_media(1);
             } else {
                 if (0 != ensure_path_mounted(v->mount_point))
-                    ui_print("Error mounting %s!\n",  v->mount_point);
+                    ui_print("error mounting %s!\n",  v->mount_point);
             }
         } else if (chosen_item < (mountable_volumes + formatable_volumes)) {
             chosen_item = chosen_item - mountable_volumes;
@@ -1179,11 +1168,11 @@ void show_partition_menu() {
             }
             if (!confirm_selection(confirm_string, confirm))
                 continue;
-            ui_print("Formatting %s...\n", v->mount_point);
+            ui_print("formatting %s...\n", v->mount_point);
             if (0 != format_volume(v->mount_point))
-                ui_print("Error formatting %s!\n", v->mount_point);
+                ui_print("error formatting %s!\n", v->mount_point);
             else
-                ui_print("Done.\n");
+                ui_print("done.\n");
         }
     }
 
@@ -1197,7 +1186,7 @@ static int show_nandroid_advanced_backup_menu(const char* path) {
         return 0;
     }
 
-	const char* headers[] = { "Advanced Backup", "", "Select partition(s) to backup:", NULL };
+	const char* headers[] = { "advanced backup", "", "select partition(s) to backup:", NULL };
     
     int backup_list[6];
     char* backup_item[6];
@@ -1214,26 +1203,26 @@ static int show_nandroid_advanced_backup_menu(const char* path) {
     int ret = 0;
     for (;cont;) {
 		if (backup_list[0] == 0)
-			backup_item[0] = "Select boot:    ";
+			backup_item[0] = "select boot:    ";
 		else
-			backup_item[0] = "Backup boot: (+)";
+			backup_item[0] = "backup boot: (+)";
 	    	
 	    if (backup_list[1] == 0)
-    		backup_item[1] = "Select system:    ";
+    		backup_item[1] = "select system:    ";
 	    else
-	    	backup_item[1] = "Backup system: (+)";
+	    	backup_item[1] = "backup system: (+)";
 
 	    if (backup_list[2] == 0)
-	    	backup_item[2] = "Select data:    ";
+	    	backup_item[2] = "select data:    ";
 	    else
-	    	backup_item[2] = "Backup data: (+)";
+	    	backup_item[2] = "backup data: (+)";
 
 	    if (backup_list[3] == 0)
-	    	backup_item[3] = "Select cache:    ";
+	    	backup_item[3] = "select cache:    ";
 	    else
-	    	backup_item[3] = "Backup cache: (+)";
+	    	backup_item[3] = "backup cache: (+)";
     	if (backup_list[4] == 0)
-	    	backup_item[4] = "Perform Backup";
+	    	backup_item[4] = "perform backup";
 	    	
 	    int chosen_item = get_menu_selection(headers, backup_item, 0, 0);
 	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
@@ -1285,7 +1274,7 @@ static int show_nandroid_advanced_restore_menu(const char* path) {
 
 	const char* advancedheaders[] = { "Choose a backup folder to restore",
 									 "",
-									 "Choose a folder to restore",
+									 "choose a folder to restore",
 									 "first. The next menu will",
 									 "show you more options.",
 									 NULL };
@@ -1296,7 +1285,7 @@ static int show_nandroid_advanced_restore_menu(const char* path) {
     if (file == NULL)
         return 0;
 
-    const char* headers[] = { "Advanced Restore", "", "Select image(s) to restore:", NULL };
+    const char* headers[] = { "Advanced restore", "", "select image(s) to restore:", NULL };
     
     int restore_list[6];
     char* restore_item[6];
@@ -1313,26 +1302,26 @@ static int show_nandroid_advanced_restore_menu(const char* path) {
     int ret = 0;
     for (;cont;) {
 		if (restore_list[0] == 0)
-			restore_item[0] = "Select boot:    ";
+			restore_item[0] = "select boot:    ";
 		else
-			restore_item[0] = "Restore boot: (+)";
+			restore_item[0] = "restore boot: (+)";
 	    	
 	    if (restore_list[1] == 0)
-    		restore_item[1] = "Select system:    ";
+    		restore_item[1] = "select system:    ";
 	    else
-	    	restore_item[1] = "Restore system: (+)";
+	    	restore_item[1] = "restore system: (+)";
 
 	    if (restore_list[2] == 0)
-	    	restore_item[2] = "Select data:    ";
+	    	restore_item[2] = "select data:    ";
 	    else
-	    	restore_item[2] = "Restore data: (+)";
+	    	restore_item[2] = "restore data: (+)";
 
 	    if (restore_list[3] == 0)
-	    	restore_item[3] = "Select cache:    ";
+	    	restore_item[3] = "select cache:    ";
 	    else
-	    	restore_item[3] = "Restore cache: (+)";
+	    	restore_item[3] = "restore cache: (+)";
     	if (restore_list[4] == 0)
-	    	restore_item[4] = "Start Restore";
+	    	restore_item[4] = "start restore";
 	    	
 	    int chosen_item = get_menu_selection(headers, restore_item, 0, 0);
 	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
@@ -1393,26 +1382,26 @@ static int show_mtk_advanced_backup_menu(const char* path) {
     int ret = 0;
     for (;cont;) {
 		if (backup_mtk[0] == 0)
-			mtkb_item[0] = "Select uboot:    ";
+			mtkb_item[0] = "select uboot:    ";
 		else
-			mtkb_item[0] = "Backup uboot: (+)";
+			mtkb_item[0] = "backup uboot: (+)";
 	    	
 	    if (backup_mtk[1] == 0)
-    		mtkb_item[1] = "Select logo:    ";
+    		mtkb_item[1] = "select logo:    ";
 	    else
-	    	mtkb_item[1] = "Backup logo: (+)";
+	    	mtkb_item[1] = "backup logo: (+)";
 
 	    if (backup_mtk[2] == 0)
-	    	mtkb_item[2] = "Select nvram:    ";
+	    	mtkb_item[2] = "select nvram:    ";
 	    else
-	    	mtkb_item[2] = "Backup nvram: (+)";
+	    	mtkb_item[2] = "backup nvram: (+)";
 
 	    if (backup_mtk[3] == 0)
-	    	mtkb_item[3] = "Select secro:    ";
+	    	mtkb_item[3] = "select secro:    ";
 	    else
-	    	mtkb_item[3] = "Backup secro: (+)";
+	    	mtkb_item[3] = "backup secro: (+)";
     	if (backup_mtk[4] == 0)
-	    	mtkb_item[4] = "Perform Backup";
+	    	mtkb_item[4] = "perform backup";
 	    	
 	    int chosen_item = get_menu_selection(headers, mtkb_item, 0, 0);
 	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
@@ -1464,7 +1453,7 @@ static int show_mtk_advanced_restore_menu(const char* path) {
 
 	const char* advancedheaders[] = { "Choose a mtk backup folder to restore",
 									 "",
-									 "Choose a folder to restore",
+									 "choose a folder to restore",
 									 "first. The next menu will",
 									 "show you more options.",
 									 NULL };
@@ -1492,26 +1481,26 @@ static int show_mtk_advanced_restore_menu(const char* path) {
     int ret = 0;
     for (;cont;) {
 		if (restore_mtk[0] == 0)
-			mtkr_item[0] = "Select uboot:    ";
+			mtkr_item[0] = "select uboot:    ";
 		else
-			mtkr_item[0] = "Restore uboot: (+)";
+			mtkr_item[0] = "restore uboot: (+)";
 	    	
 	    if (restore_mtk[1] == 0)
-    		mtkr_item[1] = "Select logo:    ";
+    		mtkr_item[1] = "select logo:    ";
 	    else
-	    	mtkr_item[1] = "Restore logo: (+)";
+	    	mtkr_item[1] = "restore logo: (+)";
 
 	    if (restore_mtk[2] == 0)
-	    	mtkr_item[2] = "Select nvram:    ";
+	    	mtkr_item[2] = "select nvram:    ";
 	    else
-	    	mtkr_item[2] = "Restore nvram: (+)";
+	    	mtkr_item[2] = "restore nvram: (+)";
 
 	    if (restore_mtk[3] == 0)
-	    	mtkr_item[3] = "Select secro:    ";
+	    	mtkr_item[3] = "select secro:    ";
 	    else
-	    	mtkr_item[3] = "Restore secro: (+)";
+	    	mtkr_item[3] = "restore secro: (+)";
     	if (restore_mtk[4] == 0)
-	    	mtkr_item[4] = "Start Restore";
+	    	mtkr_item[4] = "start restore";
 	    	
 	    int chosen_item = get_menu_selection(headers, mtkr_item, 0, 0);
 	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
@@ -1573,11 +1562,11 @@ static void show_mtk_special_backup_restore_menu() {
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
 
-    const char* headers[] = { "MTK Partitions Backup/Restore", NULL };
+    const char* headers[] = { "MTK partitions backup/restore", NULL };
 
-    char* list[] = { "MTK Backup to SDcard",
-                     "MTK Restore from SDcard",
-                     "Delete a mtk backup from SDcard",                     
+    char* list[] = { "mtk backup to sdcard",
+                     "mtk Restore from sdcard",
+                     "delete a mtk backup from sdcard",                     
                       NULL,
                       NULL,
                       NULL,
@@ -1589,9 +1578,9 @@ static void show_mtk_special_backup_restore_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL) {
-	        list[3] = "MTK Backup to ExtraSD";
-	        list[4] = "MTK Restore from ExtraSD";
-	        list[5] = "Delete a mtk backup from ExtraSD";
+	        list[3] = "mtk backup to extrasd";
+	        list[4] = "mtk restore from extrasd";
+	        list[5] = "delete a mtk backup from Extrasd";
 	    }
 	}
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
@@ -1680,10 +1669,10 @@ static void show_nandroid_advanced_menu() {
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
 
-    const char* headers[] = { "Advanced Backup and Restore", NULL };
+    const char* headers[] = { "Advanced backup and restore", NULL };
 
-    char* list[] = { "Advanced Backup to SDcard",
-                     "Advanced Restore from SDcard",
+    char* list[] = { "advanced backup to sdcard",
+                     "advanced restore from sdcard",
                       NULL,
                       NULL,
                       NULL,
@@ -1693,13 +1682,13 @@ static void show_nandroid_advanced_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL) {
-	        list[2] = "Advanced backup to ExtraSD";
-	        list[3] = "Advanced restore from ExtraSD";
+	        list[2] = "advanced backup to extrasd";
+	        list[3] = "avanced restore from extrasd";
 	    }
 	}
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
-		list[4] = "Advanced backup to USB-Drive";
-		list[5] = "Advanced restore from USB-Drive";
+		list[4] = "advanced backup to usb-drive";
+		list[5] = "advanced restore from usb-drive";
 	}
 
     for (;;) {
@@ -1742,15 +1731,14 @@ void show_nandroid_menu() {
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
     
-    const char* headers[] = { "Backup and Restore", NULL };
+    const char* headers[] = { "Backup and restore", NULL };
 
-    char* list[] = { "BACKUP to SDcard",
-					"RESTORE from SDcard",
-					"DELETE Backup from SDcard",
-					"ADVANCED Backup Restore",
-					"Default backup format",
-					"Toggle MD5 Verification",
-					NULL,
+    char* list[] = { "backup to sdcard",
+					"restore from sdcard",
+					"delete backup from sdcard",
+					"advanced backup restore",
+					"default backup format",
+					"toggle md5 verification",
 					NULL,
 					NULL,
 					NULL,
@@ -1761,15 +1749,15 @@ void show_nandroid_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL) {
-			list[6] = "BACKUP to ExtraSD";
-			list[7] = "RESTORE from ExtraSD";
-			list[8] = "DELETE Backup from ExtraSD";
+			list[6] = "backup to extrasd";
+			list[7] = "restore backup from extrasd";
+			list[8] = "delete backup from extrasd";
 		}
 	}
 	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
-		list[9] = "BACKUP to USB-Drive";
-		list[10] = "RESTORE from USB-Drive";
-		list[11] = "DELETE Backup from USB-Drive";
+		list[9] = "backup to usb-drive";
+		list[10] = "restore backup from usb-drive";
+		list[11] = "delete Backup from usb-drive";
 	}
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
     extend_nandroid_menu(list, 12, sizeof(list) / sizeof(char*));
@@ -1799,11 +1787,11 @@ void show_nandroid_menu() {
                 }
                 break;
             case 1:
-				show_nandroid_restore_menu(primary_path);
-				break;
+		show_nandroid_restore_menu(primary_path);
+		break;
             case 2:
-				show_nandroid_delete_menu(primary_path);
-				break;
+		show_nandroid_delete_menu(primary_path);
+		break;
             case 3:
                 show_nandroid_advanced_menu();
                 break;
@@ -1878,18 +1866,18 @@ static int flash_choosen_image(const char* image, const char* partition) {
 	int ret;
 	const char* name = basename(partition);
 	
-	ui_print("[*] Erasing %s before flashing...\n", name);
+	ui_print("Erasing %s before flashing...\n", name);
 	if (0 != (ret = format_volume(partition))) {
 		ui_print("Error while erasing %s partition!", name);
 		return ret;
 	}
 
-	ui_print("[*] Flashing %s image...\n", name);
+	ui_print("Flashing %s image...\n", name);
 	if (0 != (ret = restore_raw_partition(vol->fs_type, vol->device, image))) {
 		ui_print("Error while flashing %s image!", name);
 		return ret;
 	}
-	ui_print("\n[*] %s image flashed!\n", name);
+	ui_print("\n %s image flashed!\n", name);
 	return 0;
 }
 
@@ -2217,11 +2205,6 @@ static void partition_sdcard(char* volume) {
         ui_print("An error occured while partitioning your SD Card. Please see /tmp/recovery.log for more details.\n");
 }
 
-void toggle_rainbow() {
-    ui_get_rainbow_mode = !ui_get_rainbow_mode;
-    ui_print("Rainbow Mode: %s\n", ui_get_rainbow_mode ? "Enabled" : "Disabled");
-}
-
 //=========================================/
 //=      Aroma menu, original work        =/
 //=           of sk8erwitskil             =/
@@ -2309,90 +2292,6 @@ static int default_aromafm(const char* aromafm_path) {
 	return 0;
 }
 
-void show_carliv_menu() {
-	char* primary_path = get_primary_storage_path();
-    char* extra_path = get_extra_storage_path();
-    int num_extra_volumes = get_num_extra_volumes();
-
-    const char* headers[] = {  "Carliv Menu", NULL };
-
-    char* carliv_list[] = { "Aroma File Manager",
-							"Reset Battery Stats",
-							"About",
-							"Turn on/off Rainbow mode",
-							"Flash boot or recovery images",
-							NULL,
-							NULL
-    };
-#ifdef BOARD_HAS_MTK_CPU
-		carliv_list[5] = "Special MTK Partitions menu";
-#endif    
-
-    for (;;)
-    {
-		int chosen_item = get_menu_selection(headers, carliv_list, 0, 0);
-        if (chosen_item == GO_BACK || chosen_item == REFRESH)
-            break;
-		switch (chosen_item)
-        {
-			case 0:
-				{
-                    ensure_path_mounted(primary_path);
-                    if (default_aromafm(primary_path)) {
-                        break;
-	                }
-	                if (num_extra_volumes != 0) {
-		                if (extra_path != NULL) {
-		                    ensure_path_mounted(extra_path);
-		                    if (default_aromafm(extra_path)) {
-		                        break;
-		                    }
-		                }
-					}
-	                ui_print("No clockworkmod/.aromafm/aromafm.zip on sdcards\n");
-	                ui_print("Browsing custom locations\n");
-	                custom_aroma_menu();
-				}
-                break;  
-             case 1:                
-                wipe_battery_stats(ui_text_visible());
-				if (!ui_text_visible()) return;
-				break;  
-             case 2:
-				ui_set_log_stdout(0);
-				ui_clear_text();
-				ui_set_background(BACKGROUND_ICON_NONE);
-				ui_print(EXPAND(RECOVERY_VERSION)" ** "EXPAND(RECOVERY_BUILD_OS)" for "EXPAND(RECOVERY_DEVICE)"\n");
-			    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n\n");
-                ui_print("Based on Clockworkmod recovery.\n");
-                ui_print("This is a Recovery made by carliv from xda with Clockworkmod base and many improvements inspired from TWRP, PhilZ  or created by carliv.\n");
-                ui_print("With full touch support module developed by PhilZ for PhilZ Touch Recovery, ported here by carliv.\n");
-				if (volume_for_path("/custpack") != NULL)
-					ui_print("[*] With Custpack partition support for Alcatel or TCL phones\n");
-				ui_print("For Aroma File Manager is recommended version 1.80 - Calung, from amarullz xda thread, because it has a full touch support in most of devices.\n");
-				ui_print("Thank you all!\n\n");
-				ui_print("Return to menu with any key.\n");
-				ui_wait_key();
-                ui_clear_key_queue();
-                ui_clear_text();
-                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
-                ui_set_log_stdout(1);
-                break;                  
-             case 3:
-                toggle_rainbow();
-				break;                  
-             case 4:
-                show_flash_image_menu();
-				break;             
-#ifdef BOARD_HAS_MTK_CPU
-			case 5:
-                show_mtk_special_backup_restore_menu();
-                break;
-#endif				
-        }
-    }    
-}
-
 void show_advanced_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
@@ -2400,28 +2299,40 @@ void show_advanced_menu() {
 
     const char* headers[] = { "Advanced Menu", NULL };
 
-    static char* list[] = { "Report Error",
-                            "Key Test",
-                            "Show log",
-                            "Clear Screen",
+    static char* list[] = { "report error",
+                            "key test",
+                            "show log",
+                            "clear screen",
+                            "aroma file manager",
+			    "about",
+			    "flash boot or recovery images",
+                            NULL,
+                            NULL,
                             NULL,
                             NULL,
                             NULL,
                             NULL
     };
-    
-    if (primary_path != NULL) {
-	    if (can_partition(primary_path)) 
-		    list[4] = "Partition SDcard";
-	}
+
     if (num_extra_volumes != 0) {
 		if (extra_path != NULL) {
 		    if (can_partition(extra_path)) 
-			    list[5] = "Partition ExtraSD";
+			    list[7] = "partition extrasd";
 		}
 	}
+#ifdef CWM_PARTITION_SDCARD
+    if (primary_path != NULL) {
+            if (can_partition(primary_path)) 
+                    list[8] = "partition sdcard";
+        }
+#endif
+
 #ifdef ENABLE_LOKI
-		list[6] = "Toggle loki support";
+		list[9] = "toggle loki support";
+#endif
+
+#ifdef BOARD_HAS_MTK_CPU
+		list[10] = "special mtk partitions menu";
 #endif
 
     for (;;)
@@ -2459,18 +2370,61 @@ void show_advanced_menu() {
                 ui_set_background(BACKGROUND_ICON_CLOCKWORK);
                 break;
 			case 4:
+				{
+                    ensure_path_mounted(primary_path);
+                    if (default_aromafm(primary_path)) {
+                        break;
+	                }
+	                if (num_extra_volumes != 0) {
+		                if (extra_path != NULL) {
+		                    ensure_path_mounted(extra_path);
+		                    if (default_aromafm(extra_path)) {
+		                        break;
+		                    }
+		                }
+					}
+	                ui_print("no clockworkmod/.aromafm/aromafm.zip on sdcards\n");
+	                ui_print("browsing custom locations\n");
+	                custom_aroma_menu();
+				}
+                break;  
+             case 5:
+				ui_set_log_stdout(0);
+				ui_clear_text();
+				ui_set_background(BACKGROUND_ICON_NONE);
+				ui_print(EXPAND(RECOVERY_VERSION)" for "EXPAND(RECOVERY_DEVICE)"\n");
+                ui_print("This is a recovery made by Carliv with ClockworkMod base with many improvements from Carliv or other recoveries.\n");
+                ui_print("Modified GUI, to make this recovery look like the ClockworkMod one, by Marco Marcaccini (DeadSquirrel01).\n");
+				ui_print("return to menu with any key.\n");
+				ui_wait_key();
+                ui_clear_key_queue();
+                ui_clear_text();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+                ui_set_log_stdout(1);
+                break;
+             case 6:
+                show_flash_image_menu();
+				break;
+			case 7:
+                partition_sdcard(extra_path);
+                break;
+#ifdef CWM_PARTITION_SDCARD
+                        case 8:
                 partition_sdcard(primary_path);
                 break;
-			case 5:
-                partition_sdcard(extra_path);
-                break;			
+#endif
 #ifdef ENABLE_LOKI
-            case 6:
+            case 9:
                 toggle_loki_support();
                 break;
-#endif		           
+#endif
+#ifdef BOARD_HAS_MTK_CPU
+			case 10:
+                show_mtk_special_backup_restore_menu();
+                break;
+#endif				
         }
-    }
+    }    
 }
 
 void write_fstab_root(char *path, FILE *file) {

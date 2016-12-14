@@ -22,7 +22,6 @@ int signature_check_enabled;
 int md5_check_enabled;
 int script_assert_enabled;
 int vibration_enabled;
-int ui_get_rainbow_mode;
 
 void write_recovery_version();
 void toggle_md5_check();
@@ -43,10 +42,7 @@ void wipe_preflash(int confirm);
 void wipe_data(int confirm);
 void wipe_cache(int confirm);
 void wipe_dalvik_cache(int confirm);
-void wipe_battery_stats(int confirm);
 void show_wipe_menu();
-void show_carliv_menu();
-void toggle_rainbow();
 void show_multi_flash_menu();
 
 void format_sdcard(const char* volume);

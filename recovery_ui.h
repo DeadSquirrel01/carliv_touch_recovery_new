@@ -75,9 +75,8 @@ extern int device_perform_action(int which);
 #define ITEM_NANDROID        3
 #define ITEM_PARTITION       4
 #define ITEM_ADVANCED        5
-#define ITEM_CARLIV          6
-#define ITEM_POWER           7
-#define ITEM_CUSTOM          8
+#define ITEM_POWER           6
+#define ITEM_CUSTOM          7
 
 // Header text to display above the main menu.
 extern char* MENU_HEADERS[];
@@ -90,8 +89,6 @@ extern int device_wipe_data();
 extern int device_wipe_cache();
 
 extern int device_wipe_dalvik_cache();
-
-extern int device_wipe_battery_stats();
 
 extern int device_wipe_system();
 
@@ -106,8 +103,6 @@ char* word_wrap (char* buffer, const unsigned int buffer_sz, const char* string,
 extern int ui_handle_key(int key, int visible);
 int ui_menu_touch_select();
 extern int vibration_enabled;
-void ui_rainbow_mode();
-extern int ui_get_rainbow_mode;
 
 void reboot_main_system(int cmd, int flags, char *arg);
 
