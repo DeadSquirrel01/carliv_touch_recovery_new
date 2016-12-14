@@ -876,7 +876,7 @@ int setup_encrypted_data() {
 	}
 		
 	if (ret == 0) {
-		ui_print("[*] Data successfuly decrypted and mounted!\n");
+		ui_print("Data successfuly decrypted and mounted!\n");
 		if (!data_is_decrypted) { 
 			data_is_decrypted = 1; 
 		}
@@ -884,7 +884,7 @@ int setup_encrypted_data() {
 		return 0;
 	}
 	
-	ui_print("[!] Data couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
+	ui_print("Data couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
 	return 1;	
 }
 

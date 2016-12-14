@@ -382,7 +382,7 @@ static int erase_volume(const char *volume) {
         }
     }
 
-    ui_print("[*] Formatting %s...\n", volume);
+    ui_print("formatting %s...\n", volume);
 
     ensure_path_unmounted(volume);
     int result = format_volume(volume);
@@ -647,7 +647,7 @@ void wipe_preflash(int confirm) {
 	ui_print("Dalvik Cache wiped.\n");
 	if (!is_encrypted_data()) ensure_path_unmounted("/data");
 	if (volume_for_path("/sd-ext") != NULL) ensure_path_unmounted("/sd-ext"); 
-	ui_print("\nPreflash wipe complete. Don't reboot to Android right now with \"Reboot phone\" --first option in menu, because there is no system files in it. Either flash a new ROM or restore a backup to avoid troubles!!!.\n");
+	ui_print("\nPreflash wipe complete. Don't reboot to Android right now with \"reboot system now\" --first option in menu, because there is no system files in it. Either flash a new ROM or restore a backup to avoid troubles!!!.\n");
 	sleep(1);   
 }
 
@@ -841,10 +841,6 @@ static void prompt_and_wait(int status) {
                 show_advanced_menu();
                 break;
                 
-            case ITEM_CARLIV:
-                show_carliv_menu();
-                break;  
-                
             case ITEM_POWER:
                 show_power_menu();
                 break;  
@@ -965,9 +961,8 @@ int main(int argc, char **argv) {
 
     device_ui_init(&ui_parameters);
     ui_init();
-    ui_print(EXPAND(RECOVERY_VERSION)" * "EXPAND(RECOVERY_DEVICE)"\n");
-    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
-    
+    ui_print(EXPAND(RECOVERY_VERSION)"\n");
+
     load_volume_table();
     encrypted_data_mounted = 0;
 	data_is_decrypted = 0;
@@ -1094,7 +1089,6 @@ int main(int argc, char **argv) {
         signature_check_enabled = 0;
         md5_check_enabled = 0;
         script_assert_enabled = 0;
-        ui_get_rainbow_mode = 0;
         is_user_initiated_recovery = 1;
         if (!headless) {
             ui_set_show_text(1);
