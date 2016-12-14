@@ -22,15 +22,14 @@
 
 char* MENU_HEADERS[] = { NULL };
 
-char* MENU_ITEMS[] = { "Reboot Phone",
-                       "Install zip",
-                       "Wipe Menu",
-                       "Backup/Restore",
-                       "Mounts/Storage",
-                       "Advanced Menu",
-                       "Carliv Menu",
-                       "Power Menu",
-                       "Vibrate ON/OFF(touch)",
+char* MENU_ITEMS[] = { "reboot system now",
+                       "install zip",
+                       "wipe partitions",
+                       "backup and restore",
+                       "mounts and storage",
+                       "advanced",
+                       "power",
+                       "enable vibration",
                        NULL };
 
 void device_ui_init(UIParameters* ui_parameters) {
@@ -60,10 +59,6 @@ int device_wipe_cache() {
 }
 
 int device_wipe_dalvik_cache() {
-    return 0;
-}
-
-int device_wipe_battery_stats() {
     return 0;
 }
 

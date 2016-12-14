@@ -52,9 +52,9 @@ static int gShowBackButton = 0;
 
 UIParameters ui_parameters = {
     6,       // indeterminate progress bar frames
-    20,      // fps
-    6,       // installation icon frames (0 == static image)
-    10, 100, // installation icon overlay offset
+    17,      // fps
+    7,       // installation icon frames (0 == static image)
+    13, 190, // installation icon overlay offset
 };
 
 static pthread_mutex_t gUpdateMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -64,6 +64,7 @@ static gr_surface *gProgressBarIndeterminate;
 static gr_surface gProgressBarEmpty;
 static gr_surface gProgressBarFill;
 static gr_surface gVirtualKeys;
+static gr_surface gBackground;
 static int ui_has_initialized = 0;
 static int ui_log_stdout = 1;
 
@@ -72,13 +73,13 @@ static int boardRepeatableKeys[64];
 static int boardNumRepeatableKeys = 0;
 
 static const struct { gr_surface* surface; const char *name; } BITMAPS[] = {
-	{ &gBackgroundIcon[BACKGROUND_ICON_INSTALLING],          "icon_installing" },
-	{ &gBackgroundIcon[BACKGROUND_ICON_ERROR],               "icon_error" },
-	{ &gBackgroundIcon[BACKGROUND_ICON_CLOCKWORK],           "icon_clockwork" },
-	{ &gProgressBarEmpty,                                    "progress_empty" },
-	{ &gProgressBarFill,                                     "progress_fill" },
-	{ &gVirtualKeys,                                         "virtual_keys" },
-	{ NULL,                                                  NULL },
+        { &gBackgroundIcon[BACKGROUND_ICON_INSTALLING],          "icon_installing" },
+        { &gBackgroundIcon[BACKGROUND_ICON_ERROR],               "icon_error" },
+        { &gBackgroundIcon[BACKGROUND_ICON_CLOCKWORK],           "icon_clockwork" },
+        { &gProgressBarEmpty,                                    "progress_empty" },
+        { &gProgressBarFill,                                     "progress_fill" },
+        { &gBackground,                                          "stitch" },
+        { NULL,                                                    NULL },
 };
 
 static int gCurrentIcon = 0;
@@ -117,9 +118,6 @@ static int menu_items = 0;
 static int menu_sel = 0;
 static int menu_show_start = 0; // line at which menu display starts
 static int max_menu_rows;
-
-static unsigned cur_rainbow_color = 0;
-static int gRainbowMode = 0;
 
 // Key event input queue
 static pthread_mutex_t key_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -202,8 +200,21 @@ static void draw_install_overlay_locked(int frame) {
 static void draw_background_locked(int icon) {
     gPagesIdentical = 0;
 
-    gr_color(0, 0, 0, 255);
-    gr_fill(0, 0, gr_fb_width(), gr_fb_height());
+    //gr_color(0, 0, 0, 255);
+    //gr_fill(0, 0, gr_fb_width(), gr_fb_height());
+
+    {
+        int bw = gr_get_width(gBackground);
+        int bh = gr_get_height(gBackground);
+        int bx = 0;
+        int by = 0;
+        for (by = 0; by < gr_fb_height(); by += bh) {
+            for (bx = 0; bx < gr_fb_width(); bx += bw) {
+                gr_blit(gBackground, 0, 0, bw, bh, bx, by);
+            }
+        }
+    }
+
 
     if (icon) {
         gr_surface surface = gBackgroundIcon[icon];
@@ -218,7 +229,7 @@ static void draw_background_locked(int icon) {
     }
 }
 
-static void ui_increment_frame() {
+void ui_increment_frame() {
     if (!ui_has_initialized) return;
     gInstallingFrame =
         (gInstallingFrame + 1) % ui_parameters.installing_frames;
@@ -390,7 +401,6 @@ static void draw_head_line(int row, const char* t, int align) {
 static void draw_text_line(int row, const char* t, int height, int align) {
     int col = 0;
     if (t[0] != '\0') {
-		if (ui_get_rainbow_mode) ui_rainbow_mode();
         int length = strnlen(t, MENU_MAX_COLS) * CHAR_WIDTH;
         switch(align) {
             case LEFT_ALIGN:
@@ -405,24 +415,6 @@ static void draw_text_line(int row, const char* t, int height, int align) {
         }
         gr_text(col, ((row + 1) * height) - ((height - CHAR_HEIGHT) / 2) - 1, t, 0);
     }
-}
-
-static int show_battery = 0;
-static void draw_battery() {
-	int batt_level = 0;
-	int batt_stats = 0;
-	char batt_text[40] = "";	
-    batt_stats = get_batt_charging();
-    batt_level = get_batt_stats();
-    if (batt_stats == 1) {
-		sprintf(batt_text, "[+%d%%]", batt_level);
-	} else {
-		sprintf(batt_text, "[%d%%]", batt_level);
-	}
-	if (batt_level < 21)
-        gr_color(242, 38, 19, 255);
-    else gr_color(38, 194, 129, 255);
-	draw_head_line(0, batt_text, RIGHT_ALIGN);
 }
 
 /*******************************/
@@ -454,8 +446,8 @@ void fast_ui_init(void) {
 void draw_menu() {
     if (show_text) {
         // don't "disable" the background any more with this...
-        gr_color(0, 0, 0, 110);
-        gr_fill(0, 0, gr_fb_width(), gr_fb_height());
+        // gr_color(0, 0, 0, 110);
+        // (0, 0, gr_fb_width(), gr_fb_height());
 
         int i = 0;
         int j = 0;
@@ -465,8 +457,7 @@ void draw_menu() {
             if (menu_sel >= menu_show_start && menu_sel < menu_show_start + max_menu_rows - menu_top) {
                 gr_color(MENU_HIGHLIGHT_COLOR);
                 gr_fill(0, ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 1, gr_fb_width(), (menu_top + menu_sel - menu_show_start + 1) * MENU_TOTAL_HEIGHT);
-				gr_color(MENU_SELECTED_COLOR);
-				gr_fill(0, (menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT, gr_fb_width(), ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 1);
+				gr_fill(0, (menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT, gr_fb_width(), ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 2);
             }
             
             // start header text write
@@ -474,9 +465,7 @@ void draw_menu() {
             for(i = 0; i < menu_top; ++i) {
                 draw_head_line(i, menu[i], LEFT_ALIGN);
                 row++;
-            }
-            draw_battery();
-            show_battery = 1;            
+            }        
 
             if (menu_items - menu_show_start + menu_top >= max_menu_rows)
                 j = max_menu_rows - menu_top;
@@ -485,7 +474,7 @@ void draw_menu() {
 
             for(i = menu_show_start + menu_top; i < (menu_show_start + menu_top + j); ++i) {
                 if (i == menu_top + menu_sel && menu_sel >= menu_show_start && menu_sel < menu_show_start + max_menu_rows - menu_top) {
-                    gr_color(MENU_SELECTED_COLOR); 
+                    gr_color(255, 255, 255, 255);
                     draw_text_line(i - menu_show_start , menu[i], MENU_TOTAL_HEIGHT, LEFT_ALIGN);
                 } else {
                     gr_color(MENU_BACKGROUND_COLOR);
@@ -502,7 +491,7 @@ void draw_menu() {
                     break;
             }
 
-            gr_color(242, 38, 19, 255);
+            gr_color(MENU_TEXT_COLOR); // (blue)
             gr_fill(0, (row * MENU_TOTAL_HEIGHT) + (MENU_TOTAL_HEIGHT / CHAR_HEIGHT) - 1,
                     gr_fb_width(), (row * MENU_TOTAL_HEIGHT) + (MENU_TOTAL_HEIGHT / CHAR_HEIGHT) + 1);
             row++;
@@ -540,7 +529,6 @@ void draw_menu() {
 
 static int ui_menu_header_offset() {
     int offset = 1;
-    if (show_battery) offset += 2;
     if (text_cols - offset < 0) offset = 1; 
 
     return offset;
@@ -1751,9 +1739,8 @@ int ui_start_menu(const char** headers, char** items, int initial_selection) {
             strncpy(menu[i] + MENU_ITEM_HEADER_LENGTH, items[i-menu_top], MENU_MAX_COLS - 1 - MENU_ITEM_HEADER_LENGTH);
             menu[i][MENU_MAX_COLS-1] = '\0';
         }
-
         if (gShowBackButton && !ui_root_menu) {
-            strcpy(menu[i], " - <<<<  Go Back  <<<<");
+            strcpy(menu[i], " - +++++Go Back+++++");
             ++i;
         }
 
@@ -2052,15 +2039,3 @@ void ui_delete_line() {
     pthread_mutex_unlock(&gUpdateMutex);
 }
 
-void ui_rainbow_mode() {
-    static int colors[] = { 255, 0, 0,        // red
-                            255, 127, 0,      // orange
-                            255, 255, 0,      // yellow
-                            0, 255, 0,        // green
-                            60, 80, 255,      // blue
-                            143, 0, 255 };    // violet
-
-    gr_color(colors[cur_rainbow_color], colors[cur_rainbow_color+1], colors[cur_rainbow_color+2], 255);
-    cur_rainbow_color += 3;
-    if (cur_rainbow_color >= (sizeof(colors) / sizeof(colors[0]))) cur_rainbow_color = 0;
-}
