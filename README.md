@@ -1,6 +1,30 @@
-<p align="center"><big><b>Carliv Touch Recovery</b></big></p>
+<p align="center"><big><b>Carliv Touch Recovery with ClockworkMod GUI</b></big></p>
 
-[**Home page**](http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290)
+<big><b>What About this fork</b></big>:
+This is a fork of the Carliv Touch Recovery by Bluefirebird (ex Carliv) with ClockworkMod GUI
+
+So, what does this fork offers?
+1) ClockworkMod Background (https://github.com/DeadSquirrel01/carliv_touch_recovery_new/blob/cm-12.1/res/images/stitch.png)
+2) Replaced CTR images with ClockworkMod ones (https://github.com/DeadSquirrel01/carliv_touch_recovery_new/tree/cm-12.1/res/images)
+3) Changed text color in blue which become white when highlighting, like ClockworkMod
+4) Modified menu background color to a darker one, like ClockworkMod
+5) Moved "Carliv Menu" options in "advanced" menu, still like the ClockworkMod Recovery
+6) Show files which are being backed up and/or being restored in real time (feature present in CWM but not in CTR)
+7) Removed some caps from options and rename some of them according to CWM ones
+8) Removed:
+   _ Rainbow mode
+   _ VirtualKeys
+   _ Battery Percentage Display (and "reset battery stats option from "advanced" menu)
+   Well, I know they are very good and useful, but we want to modify the recovery to looks like the ClockworkMod, so, since these thing weren't present in CWM, I've deleted them, to make the recovery to looks like the CWM, but I kept this recovery's features like mount, backup USB OTG, flash recovery or boot images, install multiple zips... which do not modify the GUI like the ones I've removed
+
+<b>Important</b>: I suggest you to use custom font, since the default one is a bit smaller than the ClockworkMod one (or at least in 720x1280 resolution)
+
+Also if you want to add sdcard partition feature just add in your BoardConfig.mk the following:
+CWM_PARTITION_SDCARD := true
+Thats because in some devices like mine it caused some problems, so use that flag if you want to include it.
+
+<big><b>Carliv porting guide and CTR features:<big><b>
+
 
 - version 5.7 is for Lollipop (cm 12.1, aicp lp or resurrection remix lp).
 The version starting number is related to android version.
@@ -16,7 +40,7 @@ Features:
 - added new menu for backup and restore advanced, to use it for backing or restoring only a specific partition and I also ported from PhilZ the multizip flashing function.
 - in *Carliv menu* there is now a new section for flashing boot and recovery images. It is a feature that I needed during many recovery builds testing. I wanted an easier way to flash other image without booting to android and using an app like RashR. You can browse your storage locations for any image and after choose you will have to select on wich partition should  that be flashed. I added multiple confirmations check to avoid flashing on wrong partition. This feature works only with boot and recovery images. I won't add other partitions to this because for other things there are multiple backup restore functions.
 - for MTK phones (if the flag is used in Boardconfig) there is a new menu to backup and restore some important partitions like uboot, nvram an secro because they are involved in restoring a lost IMEI, and also the logo partition which may often get broken by bad ported ROMs.
-- besides these all my old specific menus (aroma, rainbow...) are still in place.
+- besides these all my old specific menus (aroma...) are still in place.
 - added support for dencrypting and mounting data partition using the builtin minivold from cyanogenmod with vdc commands - the ideea came from [this post of Lekensteyn](http://forum.xda-developers.com/showpost.php?p=47807114&postcount=2). Tested and working well with text ar hex passwords, and maybe will work with pin too but I don't think it will work with pattern (obviously).
 - there is no included root solution. I choose to do it this way because there is no universal root solution now and someone may end up messing things with a non-working root option. You can flash a zip installer like [Chainfire's SuperSu](http://forum.xda-developers.com/showthread.php?t=1538053) or other solution that may work for your phone.
 
