@@ -69,13 +69,13 @@ LOCAL_LDFLAGS := -Wl,--no-fatal-warnings
 # We will allways refer and give credits here to  Koushik Dutta who made this possible in 
 # the first place!
 
-RECOVERY_NAME := Carliv Touch Recovery
+RECOVERY_NAME := ClockworkMod Recovery
 
 ifndef RECOVERY_NAME
-RECOVERY_NAME := CWM Based Recovery
+RECOVERY_NAME := ClockworkMod Recovery
 endif
 
-RECOVERY_VERSION := $(RECOVERY_NAME) v5.7.3
+RECOVERY_VERSION := $(RECOVERY_NAME) v6.0.5.1
 LOCAL_CFLAGS += -DRECOVERY_VERSION="$(RECOVERY_VERSION)"
 RECOVERY_API_VERSION := 3
 RECOVERY_FSTAB_VERSION := 2
@@ -89,15 +89,15 @@ LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
 ifeq ($(BOARD_USE_CUSTOM_RECOVERY_FONT),)
 	ifneq ($(DEVICE_RESOLUTION),)
 		ifneq ($(filter $(DEVICE_RESOLUTION), 240x240 320x480 480x320 1024x600),)
-		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"font_7x16.h\"
+		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"font_10x18.h\"
 		else ifneq ($(filter $(DEVICE_RESOLUTION), 480x800 480x854 540x960 600x1024 1024x768 1280x720 1280x768 1280x800),)
-		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"roboto_10x18.h\"
+		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"roboto_16x35.h\"
 		else ifneq ($(filter $(DEVICE_RESOLUTION), 720x1280 768x1024 768x1280 800x1200 800x1280),)
-		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"font_16x35.h\"
-		else ifneq ($(filter $(DEVICE_RESOLUTION), 1080x1920 1200x1920 1920x1200 2560x1600),)
 		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"font_23x49.h\"
-		else ifneq ($(filter $(DEVICE_RESOLUTION), 1440x2560 1600x2560),)
+		else ifneq ($(filter $(DEVICE_RESOLUTION), 1080x1920 1200x1920 1920x1200 2560x1600),)
 		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"font_26x55.h\"
+		else ifneq ($(filter $(DEVICE_RESOLUTION), 1440x2560 1600x2560),)
+		    BOARD_USE_CUSTOM_RECOVERY_FONT := \"font_27x58.h\"
 		endif
 	else
 	    BOARD_USE_CUSTOM_RECOVERY_FONT := \"roboto_15x24.h\"
@@ -360,7 +360,7 @@ include $(commands_recovery_local_path)/bmlutils/Android.mk
 include $(commands_recovery_local_path)/flashutils/Android.mk
 include $(commands_recovery_local_path)/libcrecovery/Android.mk
 include $(commands_recovery_local_path)/minuictr/Android.mk
-include $(commands_recovery_local_path)/devices/Android.mk
+include $(commands_recovery_local_path)/res/Android.mk
 include $(commands_recovery_local_path)/minzip/Android.mk
 include $(commands_recovery_local_path)/minadbd/Android.mk
 include $(commands_recovery_local_path)/yaffsc/Android.mk
