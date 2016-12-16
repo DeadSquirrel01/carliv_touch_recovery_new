@@ -1,26 +1,6 @@
 <p align="center"><big><b>Carliv Touch Recovery with ClockworkMod GUI</b></big></p>
 
-<big><b>What About this fork</b></big>:
-This is a fork of the Carliv Touch Recovery by Bluefirebird (ex Carliv) with ClockworkMod GUI
-
-So, what does this fork offers?
-1) ClockworkMod Background (https://github.com/DeadSquirrl01/carliv_touch_recovery_new/blob/cm-12.1/images/stitch.png)
-2) Replaced CTR images with ClockworkMod ones (https://github.com/DeadSquirrl01/carliv_touch_recovery_new/tree/cm-12.1/images)
-3) Changed text color in blue which become white when highlighting, like ClockworkMod
-4) Modified menu background color to a darker one, like ClockworkMod
-5) Moved "Carliv Menu" options in "advanced" menu, still like the ClockworkMod Recovery
-6) Show files which are being backed up and/or being restored in real time (feature present in CWM but not in CTR)
-6) Removed some caps from options and rename some of them with CWM original names
-6) Removed:
-   _ Rainbow mode
-   _ VirtualKeys
-   _ Battery Percentage Display (and "reset battery stats option from "advanced" menu)
-   Well, I know they are very good and useful, but we want to modify the recovery to looks like the ClockworkMod, so, since these thing weren't present in CWM, I've deleted them, to make the recovery to looks like the CWM, but I kept this recovery's features like mount, backup USB OTG, flash recovery or boot images, install multiple zips... which do not modify the GUI like the ones I've removed
-
-<b>Important</b>: I suggest you to use custom font, since the default one is a bit smaller than the ClockworkMod one (or at least in 720x1280 resolution)
-
-<big><b>Carliv porting guide and CTR features:<big><b>
-
+[**Home page**](http://forum.xda-developers.com/android/software/recovery-carliv-touch-recovery-v5-1-t3389290)
 
 - version 5.7 is for Lollipop (cm 12.1, aicp lp or resurrection remix lp).
 The version starting number is related to android version.
@@ -104,6 +84,9 @@ Carliv Touch Recovery specific flags:
 
 - to block an input device use
 - `TOUCH_INPUT_BLACKLIST := "devicename"`
+
+- for compile with CWM GUI (images, text fonts, colors, see files which are being backed up and/or being restored in real time, remove VirtualKeys, rainbow mode, battery percentage show and related options and move "Carliv Menu" options in "advanced"), so use a recovery which is really like CWM (regarding graphics), but with CTR features, use
+- `USE_CWM_GRAPHICS := true`
 
 For system.prop from device tree:
 
