@@ -52,9 +52,15 @@ static int gShowBackButton = 0;
 
 UIParameters ui_parameters = {
     6,       // indeterminate progress bar frames
+#ifdef USE_CWM_GRAPHICS
     17,      // fps
     7,       // installation icon frames (0 == static image)
     13, 190, // installation icon overlay offset
+#else
+    20,      // fps
+    6,       // installation icon frames (0 == static image)
+    10, 100, // installation icon overlay offset
+#endif
 };
 
 static pthread_mutex_t gUpdateMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -64,7 +70,9 @@ static gr_surface *gProgressBarIndeterminate;
 static gr_surface gProgressBarEmpty;
 static gr_surface gProgressBarFill;
 static gr_surface gVirtualKeys;
+#ifdef USE_CWM_GRAPHICS
 static gr_surface gBackground;
+#endif
 static int ui_has_initialized = 0;
 static int ui_log_stdout = 1;
 
@@ -78,7 +86,11 @@ static const struct { gr_surface* surface; const char *name; } BITMAPS[] = {
         { &gBackgroundIcon[BACKGROUND_ICON_CLOCKWORK],           "icon_clockwork" },
         { &gProgressBarEmpty,                                    "progress_empty" },
         { &gProgressBarFill,                                     "progress_fill" },
+#ifndef USE_CWM_GRAPHICS
+     	{ &gVirtualKeys,                                         "virtual_keys" }, 
+#else
         { &gBackground,                                          "stitch" },
+#endif
         { NULL,                                                    NULL },
 };
 
@@ -118,6 +130,11 @@ static int menu_items = 0;
 static int menu_sel = 0;
 static int menu_show_start = 0; // line at which menu display starts
 static int max_menu_rows;
+
+#ifndef USE_CWM_GRAPHICS
+static unsigned cur_rainbow_color = 0;
+static int gRainbowMode = 0;
+#endif
 
 // Key event input queue
 static pthread_mutex_t key_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -200,9 +217,12 @@ static void draw_install_overlay_locked(int frame) {
 static void draw_background_locked(int icon) {
     gPagesIdentical = 0;
 
+#ifndef USE_CWM_GRAPHICS
+    gr_color(0, 0, 0, 255);
+    gr_fill(0, 0, gr_fb_width(), gr_fb_height());
+#else
     //gr_color(0, 0, 0, 255);
     //gr_fill(0, 0, gr_fb_width(), gr_fb_height());
-
     {
         int bw = gr_get_width(gBackground);
         int bh = gr_get_height(gBackground);
@@ -214,7 +234,7 @@ static void draw_background_locked(int icon) {
             }
         }
     }
-
+#endif
 
     if (icon) {
         gr_surface surface = gBackgroundIcon[icon];
@@ -401,6 +421,9 @@ static void draw_head_line(int row, const char* t, int align) {
 static void draw_text_line(int row, const char* t, int height, int align) {
     int col = 0;
     if (t[0] != '\0') {
+#ifndef USE_CWM_GRAPHICS
+		if (ui_get_rainbow_mode) ui_rainbow_mode(); 
+#endif
         int length = strnlen(t, MENU_MAX_COLS) * CHAR_WIDTH;
         switch(align) {
             case LEFT_ALIGN:
@@ -417,6 +440,25 @@ static void draw_text_line(int row, const char* t, int height, int align) {
     }
 }
 
+#ifndef USE_CWM_GRAPHICS
+static int show_battery = 0;
+static void draw_battery() {
+	int batt_level = 0;
+	int batt_stats = 0;
+	char batt_text[40] = "";	
+    batt_stats = get_batt_charging();
+    batt_level = get_batt_stats();
+    if (batt_stats == 1) {
+		sprintf(batt_text, "[+%d%%]", batt_level);
+	} else {
+		sprintf(batt_text, "[%d%%]", batt_level);
+	}
+	if (batt_level < 21)
+        gr_color(242, 38, 19, 255);
+    else gr_color(38, 194, 129, 255);
+	draw_head_line(0, batt_text, RIGHT_ALIGN);
+}
+#endif
 /*******************************/
 /* Part of touch handling code */
 /*   Original port by PhilZ    */
@@ -446,27 +488,42 @@ void fast_ui_init(void) {
 void draw_menu() {
     if (show_text) {
         // don't "disable" the background any more with this...
+#ifdef USE_CWM_GRAPHICS
         // gr_color(0, 0, 0, 110);
         // (0, 0, gr_fb_width(), gr_fb_height());
-
+#else
+        gr_color(0, 0, 0, 110);
+        gr_fill(0, 0, gr_fb_width(), gr_fb_height());
+#endif
         int i = 0;
         int j = 0;
         int row = 0;
         
         if (show_menu) {			
+#ifdef USE_CWM_GRAPHICS
             if (menu_sel >= menu_show_start && menu_sel < menu_show_start + max_menu_rows - menu_top) {
                 gr_color(MENU_HIGHLIGHT_COLOR);
                 gr_fill(0, ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 1, gr_fb_width(), (menu_top + menu_sel - menu_show_start + 1) * MENU_TOTAL_HEIGHT);
 				gr_fill(0, (menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT, gr_fb_width(), ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 2);
             }
-            
+#else
+            if (menu_sel >= menu_show_start && menu_sel < menu_show_start + max_menu_rows - menu_top) {
+                gr_color(MENU_HIGHLIGHT_COLOR);
+                gr_fill(0, ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 1, gr_fb_width(), (menu_top + menu_sel - menu_show_start + 1) * MENU_TOTAL_HEIGHT);
+				gr_color(MENU_SELECTED_COLOR);
+				gr_fill(0, (menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT, gr_fb_width(), ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 1);
+            }
+#endif
             // start header text write
             gr_color(HEADER_TEXT_COLOR);
             for(i = 0; i < menu_top; ++i) {
                 draw_head_line(i, menu[i], LEFT_ALIGN);
                 row++;
-            }        
-
+            }
+#ifndef USE_CWM_GRAPHICS
+            draw_battery();
+            show_battery = 1;   
+#endif
             if (menu_items - menu_show_start + menu_top >= max_menu_rows)
                 j = max_menu_rows - menu_top;
             else
@@ -474,8 +531,12 @@ void draw_menu() {
 
             for(i = menu_show_start + menu_top; i < (menu_show_start + menu_top + j); ++i) {
                 if (i == menu_top + menu_sel && menu_sel >= menu_show_start && menu_sel < menu_show_start + max_menu_rows - menu_top) {
+#ifdef USE_CWM_GRAPHICS
                     gr_color(255, 255, 255, 255);
-                    draw_text_line(i - menu_show_start , menu[i], MENU_TOTAL_HEIGHT, LEFT_ALIGN);
+#else
+                    gr_color(MENU_SELECTED_COLOR); 
+#endif 
+                   draw_text_line(i - menu_show_start , menu[i], MENU_TOTAL_HEIGHT, LEFT_ALIGN);
                 } else {
                     gr_color(MENU_BACKGROUND_COLOR);
                     gr_fill(0, ((i - menu_show_start) * MENU_TOTAL_HEIGHT) + 1,
@@ -491,7 +552,11 @@ void draw_menu() {
                     break;
             }
 
+#ifdef USE_CWM_GRAPHICS
             gr_color(MENU_TEXT_COLOR); // (blue)
+#else
+            gr_color(242, 38, 19, 255); // (red)
+#endif
             gr_fill(0, (row * MENU_TOTAL_HEIGHT) + (MENU_TOTAL_HEIGHT / CHAR_HEIGHT) - 1,
                     gr_fb_width(), (row * MENU_TOTAL_HEIGHT) + (MENU_TOTAL_HEIGHT / CHAR_HEIGHT) + 1);
             row++;
@@ -529,6 +594,9 @@ void draw_menu() {
 
 static int ui_menu_header_offset() {
     int offset = 1;
+#ifndef USE_CWM_GRAPHICS
+    if (show_battery) offset += 2;
+#endif
     if (text_cols - offset < 0) offset = 1; 
 
     return offset;
@@ -1740,7 +1808,11 @@ int ui_start_menu(const char** headers, char** items, int initial_selection) {
             menu[i][MENU_MAX_COLS-1] = '\0';
         }
         if (gShowBackButton && !ui_root_menu) {
+#ifdef USE_CWM_GRAPHICS
             strcpy(menu[i], " - +++++Go Back+++++");
+#else
+            strcpy(menu[i], " - <<<<  Go Back  <<<<");
+#endif
             ++i;
         }
 
@@ -2039,3 +2111,17 @@ void ui_delete_line() {
     pthread_mutex_unlock(&gUpdateMutex);
 }
 
+#ifndef USE_CWM_GRAPHICS
+void ui_rainbow_mode() {
+    static int colors[] = { 255, 0, 0,        // red
+                            255, 127, 0,      // orange
+                            255, 255, 0,      // yellow
+                            0, 255, 0,        // green
+                            60, 80, 255,      // blue
+                            143, 0, 255 };    // violet
+
+    gr_color(colors[cur_rainbow_color], colors[cur_rainbow_color+1], colors[cur_rainbow_color+2], 255);
+    cur_rainbow_color += 3;
+    if (cur_rainbow_color >= (sizeof(colors) / sizeof(colors[0]))) cur_rainbow_color = 0;
+}
+#endif

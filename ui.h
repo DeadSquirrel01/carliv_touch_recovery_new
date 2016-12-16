@@ -7,10 +7,17 @@
 
 #include "common.h"
 
+#ifdef USE_CWM_GRAPHICS
 #define MAX_COLS 128
 #define MAX_ROWS 64
 #define MENU_MAX_COLS 128
 #define MENU_MAX_ROWS 500
+#else
+#define MAX_COLS 96
+#define MAX_ROWS 32
+#define MENU_MAX_COLS 64
+#define MENU_MAX_ROWS 250
+#endif /* USE_CWM_GRAPHICS */
 
 #define MIN_LOG_ROWS 3
 
@@ -34,7 +41,9 @@
 #define LEFT_ALIGN   0
 #define CENTER_ALIGN 1
 #define RIGHT_ALIGN  2
-                            /*  R   G_   B_   A   */
+                            /*   R   G    B    A   */
+#ifdef USE_CWM_GRAPHICS
+
 #define MENU_TEXT_COLOR         0, 191, 255, 255
 #define MENU_SELECTED_COLOR     255, 255, 255, 255
 #define NORMAL_TEXT_COLOR       200, 200, 200, 255
@@ -42,6 +51,15 @@
 #define MENU_HIGHLIGHT_COLOR    MENU_TEXT_COLOR
 #define MENU_BACKGROUND_COLOR   20, 10, 10, 150
 #define MENU_SEPARATOR_COLOR    50, 50, 50, 50
+#else
+#define MENU_TEXT_COLOR         242, 241, 239, 255
+#define MENU_SELECTED_COLOR     255, 255, 255, 255
+#define NORMAL_TEXT_COLOR       230, 230, 230, 255
+#define HEADER_TEXT_COLOR       34, 167, 240, 255
+#define MENU_BACKGROUND_COLOR   50, 50, 50, 160
+#define MENU_HIGHLIGHT_COLOR    8, 157, 227, 255
+#define MENU_SEPARATOR_COLOR    34, 167, 240, 70
+#endif /* USE_CWM_GRAPHICS */
 
 #define MENU_CHAR_HEIGHT        ((CHAR_HEIGHT) - ((CHAR_HEIGHT) % 4))
 #define MENU_TOTAL_HEIGHT       ((CHAR_HEIGHT) + ((MENU_CHAR_HEIGHT) * 1.6))

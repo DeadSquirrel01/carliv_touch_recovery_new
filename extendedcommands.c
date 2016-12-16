@@ -171,22 +171,38 @@ void toggle_vibration() {
 #define POWER_ITEM_POWEROFF	    2
 
 void show_power_menu() {
-	
+
 	const char* headers[] = { "Power Options", NULL };
-    
+
     char* power_items[4];
-    
-	power_items[0] = "Reboot Recovery";
+
+#ifdef USE_CWM_GRAPHICS
+	power_items[0] = "reboot recovery";
+#else
+        power_items[0] = "Reboot Recovery";
+#endif
 	char bootloader_mode[PROPERTY_VALUE_MAX];
 	property_get("ro.bootloader.mode", bootloader_mode, "");
 	if (!strcmp(bootloader_mode, "download")) {
-	power_items[1] = "Reboot to Download";
+#ifdef USE_CWM_GRAPHICS
+	power_items[1] = "reboot to download";
+#else
+        power_items[1] = "Reboot to Download";
+#endif
 	} else {
-	power_items[1] = "Reboot to Bootloader";
+#ifdef USE_CWM_GRAPHICS
+	power_items[1] = "reboot to bootloader";
+#else
+        power_items[1] = "Reboot to Bootloader";
+#endif
 	}
-	power_items[2] = "Power Off";
+#ifdef USE_CWM_GRAPHICS
+	power_items[2] = "power off";
+#else
+        power_items[2] = "Power Off";
+#endif
 	power_items[3] = NULL;
-	
+
 	for (;;) {
 		int chosen_item = get_menu_selection(headers, power_items, 0, 0);
 		if (chosen_item == GO_BACK || chosen_item == REFRESH)
@@ -233,12 +249,20 @@ void show_install_update_menu() {
     int wipe_cache = 0;
     
     const char* headers[] = { "Install from zip file", NULL };
-    
-    char* install_menu_items[] = {  "choose zip from sdcard",
+    char* install_menu_items[] = {  
+#ifdef USE_CWM_GRAPHICS
+                                    "choose zip from sdcard",
                                     "install zip from sideload",
                                     "choose from last install folder",
                                     "multi-zip installer",
                                     "toggle signature verification",
+#else
+                                    "Choose zip from Sdcard",
+                                    "Install zip from sideload",
+                                    "Choose from last install folder",
+                                    "Multi-zip Installer",
+                                    "Toggle Signature Verification",
+#endif
                                     NULL,
                                     NULL,
                                     NULL 
@@ -246,10 +270,18 @@ void show_install_update_menu() {
 
 	if (num_extra_volumes != 0) {
 		if (extra_path != NULL) 
+#ifdef USE_CWM_GRAPHICS
 			install_menu_items[5] = "choose zip from extrasd";	
+#else
+			install_menu_items[5] = "Choose zip from ExtraSD";
+#endif
     }
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+#ifdef USE_CWM_GRAPHICS
         install_menu_items[6] = "choose zip from usb-drive";
+#else
+        install_menu_items[6] = "Choose zip from USB-Drive";
+#endif
 	}
     
     for (;;) {
@@ -292,16 +324,40 @@ void show_install_update_menu() {
     }
 }
 
+#ifndef USE_CWM_GRAPHICS
+void wipe_battery_stats(int confirm) {
+	if (confirm && !confirm_selection( "Confirm reset battery stats?", "Yes - Reset battery stats"))
+        return;
+	if (!is_encrypted_data()) ensure_path_mounted("/data");
+    device_wipe_battery_stats();
+    ui_print("\n-- Resetting battery stats...\n");
+    __system("rm -f /data/system/batterystats.bin");
+	ui_print("Battery stats resetted.\n");
+    if (!is_encrypted_data()) ensure_path_unmounted("/data");
+}
+#endif
+
 void show_wipe_menu() {
 
+#ifdef USE_CWM_GRAPHICS
     const char* headers[] = { "Wipe partitions", NULL };
-    
+
 	char* wipe_items[] = { "wipe data - factory reset",
 						   "wipe cache",
 						   "wipe dalvik cache",
-						   "wipe all - preflash",
+						   "wipe all partitions",
 						   NULL };
 
+#else
+    const char* headers[] = { "Wipe Menu", NULL };
+    
+	char* wipe_items[] = { "Wipe Data - Factory Reset",
+						   "Wipe Cache",
+						   "Wipe Dalvik Cache",
+						   "Wipe ALL - Preflash",
+						   NULL };
+
+#endif
 	for (;;) {
 		int chosen_item = get_filtered_menu_selection(headers, wipe_items, 0, 0, sizeof(wipe_items) / sizeof(char*));
 		if (chosen_item == GO_BACK || chosen_item == REFRESH)
@@ -549,8 +605,11 @@ static void show_choose_zip_menu(const char *mount_point) {
     if (file == NULL)
         return;
     char confirm[PATH_MAX];
+#ifdef USE_CWM_GRAPHICS
+    sprintf(confirm, "Yes -- install %s", basename(file));
+#else
     sprintf(confirm, "Yes - Install %s", basename(file));
-
+#endif
     if (confirm_selection("Confirm install?", confirm)) {
         install_zip(file);
         write_last_install_path(dirname(file));
@@ -571,14 +630,22 @@ void show_multi_flash_menu() {
     char* extra_path = get_extra_storage_path();
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
-    
+
+#ifdef USE_CWM_GRAPHICS
     const char* headers_dir[] = { "choose a set of zip files",
+#else
+    const char* headers_dir[] = { "Choose a set of zip files",
+#endif
                                    NULL
     };
+#ifdef USE_CWM_GRAPHICS
     const char* headers[] = {  "select files to install...",
+#else
+    const char* headers[] = {  "Select files to install...",
+#endif
                                 NULL
     };
-    
+
     char tmp[PATH_MAX];
     char dirz[PATH_MAX];
     char* zip_folder = NULL;
@@ -687,7 +754,11 @@ void show_multi_flash_menu() {
         //flashing selected zip files
         if (chosen_item == 1) {
             static char confirm[PATH_MAX];
+#ifdef USE_CWM_GRAPHICS
+            sprintf(confirm, "Yes -- install from %s", basename(zip_folder));
+#else
             sprintf(confirm, "Yes - Install from %s", basename(zip_folder));
+#endif
             if (confirm_selection("Install selected files?", confirm))
             {
                 for(i=2; i < numFiles+2; i++) {
@@ -718,7 +789,11 @@ void show_nandroid_restore_menu(const char* path) {
     if (file == NULL)
         return;
 
+#ifdef USE_CWM_GRAPHICS
+    if (confirm_selection("Confirm restore?", "Yes -- restore"))
+#else
     if (confirm_selection("Confirm restore?", "Yes - Restore"))
+#endif
         nandroid_restore(file, 1, 1, 1, 1, 1, 0);
 
     free(file);
@@ -738,7 +813,11 @@ static void show_nandroid_delete_menu(const char* path) {
     if (file == NULL)
         return;
 
+#ifdef USE_CWM_GRAPHICS
+    if (confirm_selection("Confirm delete?", "Yes -- delete")) {
+#else
     if (confirm_selection("Confirm delete?", "Yes - Delete")) {
+#endif
         // nandroid_restore(file, 1, 1, 1, 1, 1, 0);
         ui_print("-- Deleting %s\n", basename(file));
         sprintf(tmp, "rm -rf %s", file);
@@ -893,9 +972,15 @@ void show_mount_usb_storage_menu() {
     if (control_usb_storage(volumes, 1))
         return;
 
+#ifdef USE_CWM_GRAPHICS
     const char* headers[] = { "USB mass storage device",
 							 "Leaving this menu unmounts",
 							 "your sd card from your pc",
+#else
+    const char* headers[] = { "USB Mass Storage device",
+							 "Leaving this menu unmounts",
+							 "your SD card from your PC",
+#endif
 							 NULL
     };
 
@@ -1067,8 +1152,12 @@ void show_partition_menu() {
         }
     }
 
-    static char* confirm_format  = "confirm format?";
-    static char* confirm = "yes - format";
+    static char* confirm_format  = "Confirm format?";
+#ifdef USE_CWM_GRAPHICS
+    static char* confirm = "yes -- format";
+#else
+    static char* confirm = "Yes - Format";
+#endif
     char confirm_string[255];
     char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
@@ -1202,11 +1291,33 @@ static int show_nandroid_advanced_backup_menu(const char* path) {
     int cont = 1;
     int ret = 0;
     for (;cont;) {
+#ifndef USE_CWM_GRAPHICS
+		if (backup_list[0] == 0)
+			backup_item[0] = "Select boot:    ";
+		else
+			backup_item[0] = "Backup boot: (+)";
+	    	
+	    if (backup_list[1] == 0)
+    		backup_item[1] = "Select system:    ";
+	    else
+	    	backup_item[1] = "Backup system: (+)";
+
+	    if (backup_list[2] == 0)
+	    	backup_item[2] = "Select data:    ";
+	    else
+	    	backup_item[2] = "Backup data: (+)";
+
+	    if (backup_list[3] == 0)
+	    	backup_item[3] = "Select cache:    ";
+	    else
+	    	backup_item[3] = "Backup cache: (+)";
+    	if (backup_list[4] == 0)
+	    	backup_item[4] = "Perform Backup";
+#else
 		if (backup_list[0] == 0)
 			backup_item[0] = "select boot:    ";
 		else
 			backup_item[0] = "backup boot: (+)";
-	    	
 	    if (backup_list[1] == 0)
     		backup_item[1] = "select system:    ";
 	    else
@@ -1222,8 +1333,8 @@ static int show_nandroid_advanced_backup_menu(const char* path) {
 	    else
 	    	backup_item[3] = "backup cache: (+)";
     	if (backup_list[4] == 0)
-	    	backup_item[4] = "perform backup";
-	    	
+	    	backup_item[4] = "start backup";
+#endif /* USE_CWM_GRAPHICS */
 	    int chosen_item = get_menu_selection(headers, backup_item, 0, 0);
 	    if (chosen_item == GO_BACK || chosen_item == REFRESH)
             break;
@@ -1465,7 +1576,7 @@ static int show_mtk_advanced_restore_menu(const char* path) {
         return 0;
 
     const char* headers[] = { "Advanced MTK Restore", "", "Select image(s) to restore:", NULL };
-    
+
     int restore_mtk[6];
     char* mtkr_item[6];
     
@@ -1545,7 +1656,11 @@ static void show_mtk_delete_menu(const char* path) {
     if (file == NULL)
         return;
 
+#ifdef USE_CWM_GRAPHICS
+    if (confirm_selection("Confirm delete?", "Yes -- delete")) {
+#else
     if (confirm_selection("Confirm delete?", "Yes - Delete")) {
+#endif
         ui_print("-- Deleting %s\n", basename(file));
         sprintf(tmp, "rm -rf %s", file);
         __system(tmp);
@@ -1564,9 +1679,15 @@ static void show_mtk_special_backup_restore_menu() {
 
     const char* headers[] = { "MTK partitions backup/restore", NULL };
 
+#ifdef USE_CWM_GRAPHICS
     char* list[] = { "mtk backup to sdcard",
                      "mtk Restore from sdcard",
-                     "delete a mtk backup from sdcard",                     
+                     "delete a mtk backup from sdcard",
+#else
+    char* list[] = { "MTK Backup to SDcard",
+                     "MTK Restore from SDcard",
+                     "Delete a mtk backup from SDcard",
+#endif
                       NULL,
                       NULL,
                       NULL,
@@ -1578,15 +1699,27 @@ static void show_mtk_special_backup_restore_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL) {
+#ifdef USE_CWM_GRAPHICS
 	        list[3] = "mtk backup to extrasd";
 	        list[4] = "mtk restore from extrasd";
-	        list[5] = "delete a mtk backup from Extrasd";
+	        list[5] = "delete a mtk backup from extrasd";
+#else
+	        list[3] = "MTK Backup to ExtraSD";
+	        list[4] = "MTK Restore from ExtraSD";
+	        list[5] = "Delete a mtk backup from ExtraSD";
+#endif
 	    }
 	}
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+#ifdef USE_CWM_GRAPHICS
+                list[6] = "MTK backup to USB drive";
+        list[7] = "MTK restore from USB drive";
+        list[8] = "delete a mtk backup from USB drive";
+#else
 		list[6] = "MTK Backup to USB-Drive";
         list[7] = "MTK Restore from USB-Drive";
         list[8] = "Delete a mtk backup from USB-Drive";
+#endif
 	}
 
     for (;;) {
@@ -1630,7 +1763,11 @@ static void show_mtk_special_backup_restore_menu() {
 #endif
 
 static void choose_default_backup_format() {
+#ifdef USE_CWM_GRAPHICS
+    const char* headers[] = { "default backup format", NULL };
+#else
     const char* headers[] = { "Default Backup Format", NULL };
+#endif
 
     int fmt = nandroid_get_default_backup_format();
 
@@ -1671,8 +1808,13 @@ static void show_nandroid_advanced_menu() {
 
     const char* headers[] = { "Advanced backup and restore", NULL };
 
+#ifdef USE_CWM_GRAPHICS
     char* list[] = { "advanced backup to sdcard",
                      "advanced restore from sdcard",
+#else
+    char* list[] = { "Advanced Backup to SDcard",
+                     "Advanced Restore from SDcard",
+#endif
                       NULL,
                       NULL,
                       NULL,
@@ -1682,13 +1824,23 @@ static void show_nandroid_advanced_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL) {
+#ifdef USE_CWM_GRAPHICS
 	        list[2] = "advanced backup to extrasd";
 	        list[3] = "avanced restore from extrasd";
+#else
+	        list[2] = "Advanced backup to ExtraSD";
+	        list[3] = "Advanced restore from ExtraSD";
+#endif
 	    }
 	}
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+#ifdef USE_CWM_GRAPHICS
 		list[4] = "advanced backup to usb-drive";
 		list[5] = "advanced restore from usb-drive";
+#else
+		list[4] = "Advanced backup to USB-Drive";
+		list[5] = "Advanced restore from USB-Drive";
+#endif
 	}
 
     for (;;) {
@@ -1733,12 +1885,21 @@ void show_nandroid_menu() {
     
     const char* headers[] = { "Backup and restore", NULL };
 
+#ifdef USE_CWM_GRAPHICS
     char* list[] = { "backup to sdcard",
 					"restore from sdcard",
 					"delete backup from sdcard",
 					"advanced backup restore",
 					"default backup format",
 					"toggle md5 verification",
+#else
+    char* list[] = { "BACKUP to SDcard",
+					"RESTORE from SDcard",
+					"DELETE Backup from SDcard",
+					"ADVANCED Backup Restore",
+					"Default backup format",
+					"Toggle MD5 Verification",
+#endif
 					NULL,
 					NULL,
 					NULL,
@@ -1749,15 +1910,27 @@ void show_nandroid_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL) {
+#ifdef USE_CWM_GRAPHICS
 			list[6] = "backup to extrasd";
 			list[7] = "restore backup from extrasd";
 			list[8] = "delete backup from extrasd";
+#else
+			list[6] = "BACKUP to ExtraSD";
+			list[7] = "RESTORE from ExtraSD";
+			list[8] = "DELETE Backup from ExtraSD";
+#endif
 		}
 	}
 	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+#ifdef USE_CWM_GRAPHICS
 		list[9] = "backup to usb-drive";
 		list[10] = "restore backup from usb-drive";
 		list[11] = "delete Backup from usb-drive";
+#else
+		list[9] = "BACKUP to USB-Drive";
+		list[10] = "RESTORE from USB-Drive";
+		list[11] = "DELETE Backup from USB-Drive";
+#endif
 	}
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
     extend_nandroid_menu(list, 12, sizeof(list) / sizeof(char*));
@@ -1889,7 +2062,11 @@ static int ctr_flash_image(const char* image, int boot, int recovery) {
 
 	int ret;
 	char confirm[PATH_MAX];
+#ifdef USE_CWM_GRAPHICS
+    sprintf(confirm, "Yes -- flash it");
+#else
     sprintf(confirm, "Yes - Flash it!");
+#endif
 	if (boot) {
 		if(strstr(imgname, "boot")) { 
 			if (0 != (ret = flash_choosen_image(image, "/boot"))) return ret;
@@ -1917,7 +2094,7 @@ static int ctr_flash_image(const char* image, int boot, int recovery) {
     ui_set_background(BACKGROUND_ICON_NONE);
     sleep(1);
 	
-	if (recovery && confirm_selection("Do you want to reboot recovery now?", "Yes - Reboot recovery")) {	
+	if (recovery && confirm_selection("Do you want to reboot recovery now?", "Yes reboot recovery")) {	
 	    reboot_main_system(ANDROID_RB_RESTART2, 0, "recovery");
 	    return 0;
 	}
@@ -1961,9 +2138,12 @@ static void show_choose_image_menu(const char *mount_point) {
     if (file == NULL)
         return;
     char confirm[PATH_MAX];
+#ifdef USE_CWM_GRAPHICS
+    sprintf(confirm, "yes -- flash %s", basename(file));
+#else
     sprintf(confirm, "Yes - Flash %s", basename(file));
-
-    if (confirm_selection("Confirm Flash this image?", confirm)) {
+#endif
+    if (confirm_selection("Confirm flash this image?", confirm)) {
         choose_image_path_menu(file);
     }
     
@@ -1975,10 +2155,16 @@ static void show_flash_image_menu() {
     char* extra_path = get_extra_storage_path();
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
-    
+
+#ifdef USE_CWM_GRAPHICS
+    const char* headers[] = {  "flash images from", NULL };
+
+    static char* list[] = { "sdcard",
+#else
     const char* headers[] = {  "Flash Images from", NULL };
 
     static char* list[] = { "SDcard",
+#endif
                             NULL,
                             NULL,
                             NULL
@@ -1986,10 +2172,18 @@ static void show_flash_image_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL)
-	        list[1] = "ExtraSD";
+#ifdef USE_CWM_GRAPHICS
+	        list[1] = "extrasd";
+#else
+                list[1] = "ExtraSD";
+#endif
 	}
     if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+#ifdef USE_CWM_GRAPHICS
+        list[2] = "USB drive";
+#else
         list[2] = "USB-Drive";
+#endif
 	}
 
     for (;;) {
@@ -2044,9 +2238,14 @@ void format_sdcard(const char* volume) {
     int chosen_item = get_menu_selection(headers, list, 0, 0);
     if (chosen_item == GO_BACK || chosen_item == REFRESH)
         return;
+
+#ifdef USE_CWM_GRAPHICS
+    if (!confirm_selection( "Confirm formatting?", "yes -- format device"))
+#else
     if (!confirm_selection( "Confirm formatting?", "Yes - Format device"))
+#endif
         return;
-        
+
 	if (ensure_path_unmounted(v->mount_point) != 0)
         return;
 
@@ -2171,9 +2370,15 @@ static void partition_sdcard(char* volume) {
                                        "ext4",
                                        NULL };
 
+#ifdef USE_CWM_GRAPHICS
+    static const char* ext_headers[] = { "ext size", NULL };
+    static const char* swap_headers[] = { "swap size", NULL };
+    static const char* fstype_headers[] = { "partition type", NULL };
+#else
     static const char* ext_headers[] = { "Ext Size", NULL };
     static const char* swap_headers[] = { "Swap Size", NULL };
     static const char* fstype_headers[] = { "Partition Type", NULL };
+#endif
 
     int ext_size = get_menu_selection(ext_headers, ext_sizes, 0, 0);
     if (ext_size == GO_BACK)
@@ -2205,6 +2410,13 @@ static void partition_sdcard(char* volume) {
         ui_print("An error occured while partitioning your SD Card. Please see /tmp/recovery.log for more details.\n");
 }
 
+#ifndef USE_CWM_GRAPHICS
+void toggle_rainbow() {
+    ui_get_rainbow_mode = !ui_get_rainbow_mode;
+    ui_print("Rainbow Mode: %s\n", ui_get_rainbow_mode ? "Enabled" : "Disabled");
+}
+#endif
+
 //=========================================/
 //=      Aroma menu, original work        =/
 //=           of sk8erwitskil             =/
@@ -2222,9 +2434,13 @@ static void choose_aromafm_menu(const char* aromafm_path) {
     char* aroma_file = choose_file_menu(aromafm_path, "aromafm.zip", headers);
     if (aroma_file == NULL)
         return;
+#ifdef USE_CWM_GRAPHICS
+    static char* confirm_install  = "Confirm run aroma?";
+#else
     static char* confirm_install  = "Confirm Run Aroma?";
+#endif
     static char confirm[PATH_MAX];
-    sprintf(confirm, "Yes - Run %s", basename(aroma_file));
+    sprintf(confirm, "Yes -- Run %s", basename(aroma_file));
     if (confirm_selection(confirm_install, confirm)) {
         ui_show_text(0);
         install_zip(aroma_file);
@@ -2238,10 +2454,16 @@ static void custom_aroma_menu() {
     char* extra_path = get_extra_storage_path();
     char* usb_path = get_usb_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
-    
+
+#ifdef USE_CWM_GRAPHICS
+    const char* headers[] = {  "browse sdcards for aromafm", NULL };
+
+    static char* list[] = { "search sdcard",
+#else
     const char* headers[] = {  "Browse Sdcards for aromafm", NULL };
 
     static char* list[] = { "Search SDcard",
+#endif
                             NULL,
                             NULL,
                             NULL
@@ -2249,10 +2471,18 @@ static void custom_aroma_menu() {
 
     if (num_extra_volumes != 0) {
 	    if (extra_path != NULL)
-	        list[1] = "Search ExtraSD";
+#ifdef USE_CWM_GRAPHICS
+	        list[1] = "search extrasd";
+#else
+                list[1] = "Search ExtraSD";
+#endif
 	}
 	if (usb_path != NULL && ensure_path_mounted(usb_path) == 0) {
+#ifdef USE_CWM_GRAPHICS
+        list[2] = "search USB drive";
+#else
         list[2] = "Search USB-Drive";
+#endif
 	}
 
     for (;;) {
@@ -2292,20 +2522,21 @@ static int default_aromafm(const char* aromafm_path) {
 	return 0;
 }
 
+#ifdef USE_CWM_GRAPHICS
 void show_advanced_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
     int num_extra_volumes = get_num_extra_volumes();
 
-    const char* headers[] = { "Advanced Menu", NULL };
+    const char* headers[] = { "advanced", NULL };
 
     static char* list[] = { "report error",
                             "key test",
                             "show log",
                             "clear screen",
                             "aroma file manager",
-			    "about",
-			    "flash boot or recovery images",
+	                    "about",
+		            "flash boot or recovery images",
                             NULL,
                             NULL,
                             NULL,
@@ -2320,12 +2551,10 @@ void show_advanced_menu() {
 			    list[7] = "partition extrasd";
 		}
 	}
-#ifdef CWM_PARTITION_SDCARD
     if (primary_path != NULL) {
             if (can_partition(primary_path)) 
                     list[8] = "partition sdcard";
         }
-#endif
 
 #ifdef ENABLE_LOKI
 		list[9] = "toggle loki support";
@@ -2393,7 +2622,7 @@ void show_advanced_menu() {
 				ui_clear_text();
 				ui_set_background(BACKGROUND_ICON_NONE);
 				ui_print(EXPAND(RECOVERY_VERSION)" for "EXPAND(RECOVERY_DEVICE)"\n");
-                ui_print("This is a recovery made by Carliv with ClockworkMod base with many improvements from Carliv or other recoveries.\n");
+                ui_print("This is a recovery made by Bluefirebird (ex Carliv) with ClockworkMod base with many improvements from him or other recoveries.\n");
                 ui_print("Modified GUI, to make this recovery look like the ClockworkMod one, by Marco Marcaccini (DeadSquirrel01).\n");
 				ui_print("return to menu with any key.\n");
 				ui_wait_key();
@@ -2408,11 +2637,9 @@ void show_advanced_menu() {
 			case 7:
                 partition_sdcard(extra_path);
                 break;
-#ifdef CWM_PARTITION_SDCARD
                         case 8:
                 partition_sdcard(primary_path);
                 break;
-#endif
 #ifdef ENABLE_LOKI
             case 9:
                 toggle_loki_support();
@@ -2426,6 +2653,172 @@ void show_advanced_menu() {
         }
     }    
 }
+#else /* USE_CWM_GRAPHICS */
+void show_carliv_menu() {
+	char* primary_path = get_primary_storage_path();
+    char* extra_path = get_extra_storage_path();
+    int num_extra_volumes = get_num_extra_volumes();
+
+    const char* headers[] = {  "Carliv Menu", NULL };
+
+    char* carliv_list[] = { "Aroma File Manager",
+							"Reset Battery Stats",
+							"About",
+							"Turn on/off Rainbow mode",
+							"Flash boot or recovery images",
+							NULL,
+							NULL
+    };
+#ifdef BOARD_HAS_MTK_CPU
+		carliv_list[5] = "Special MTK Partitions menu";
+#endif    
+
+    for (;;)
+    {
+		int chosen_item = get_menu_selection(headers, carliv_list, 0, 0);
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
+            break;
+		switch (chosen_item)
+        {
+			case 0:
+				{
+                    ensure_path_mounted(primary_path);
+                    if (default_aromafm(primary_path)) {
+                        break;
+	                }
+	                if (num_extra_volumes != 0) {
+		                if (extra_path != NULL) {
+		                    ensure_path_mounted(extra_path);
+		                    if (default_aromafm(extra_path)) {
+		                        break;
+		                    }
+		                }
+					}
+	                ui_print("No clockworkmod/.aromafm/aromafm.zip on sdcards\n");
+	                ui_print("Browsing custom locations\n");
+	                custom_aroma_menu();
+				}
+                break;  
+             case 1:                
+                wipe_battery_stats(ui_text_visible());
+				if (!ui_text_visible()) return;
+				break;  
+             case 2:
+				ui_set_log_stdout(0);
+				ui_clear_text();
+				ui_set_background(BACKGROUND_ICON_NONE);
+				ui_print(EXPAND(RECOVERY_VERSION)" ** "EXPAND(RECOVERY_BUILD_OS)" for "EXPAND(RECOVERY_DEVICE)"\n");
+			    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n\n");
+                ui_print("Based on Clockworkmod recovery.\n");
+                ui_print("This is a Recovery made by carliv from xda with Clockworkmod base and many improvements inspired from TWRP, PhilZ  or created by carliv.\n");
+                ui_print("With full touch support module developed by PhilZ for PhilZ Touch Recovery, ported here by carliv.\n");
+				if (volume_for_path("/custpack") != NULL)
+					ui_print("[*] With Custpack partition support for Alcatel or TCL phones\n");
+				ui_print("For Aroma File Manager is recommended version 1.80 - Calung, from amarullz xda thread, because it has a full touch support in most of devices.\n");
+				ui_print("Thank you all!\n\n");
+				ui_print("Return to menu with any key.\n");
+				ui_wait_key();
+                ui_clear_key_queue();
+                ui_clear_text();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+                ui_set_log_stdout(1);
+                break;                  
+             case 3:
+                toggle_rainbow();
+				break;                  
+             case 4:
+                show_flash_image_menu();
+				break;             
+#ifdef BOARD_HAS_MTK_CPU
+			case 5:
+                show_mtk_special_backup_restore_menu();
+                break;
+#endif				
+        }
+    }    
+}
+
+void show_advanced_menu() {
+	char* primary_path = get_primary_storage_path();
+    char* extra_path = get_extra_storage_path();
+    int num_extra_volumes = get_num_extra_volumes();
+
+    const char* headers[] = { "Advanced Menu", NULL };
+
+    static char* list[] = { "Report Error",
+                            "Key Test",
+                            "Show log",
+                            "Clear Screen",
+                            NULL,
+                            NULL,
+                            NULL,
+                            NULL
+    };
+    
+    if (primary_path != NULL) {
+	    if (can_partition(primary_path)) 
+		    list[4] = "Partition SDcard";
+	}
+    if (num_extra_volumes != 0) {
+		if (extra_path != NULL) {
+		    if (can_partition(extra_path)) 
+			    list[5] = "Partition ExtraSD";
+		}
+	}
+#ifdef ENABLE_LOKI
+		list[6] = "Toggle loki support";
+#endif
+
+    for (;;)
+    {
+        int chosen_item = get_filtered_menu_selection(headers, list, 0, 0, sizeof(list) / sizeof(char*));
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
+            break;
+        switch (chosen_item)
+        {
+            case 0:
+                handle_failure();
+                break;
+            case 1:
+            {
+				ui_print("Outputting key codes.\n");
+                ui_print("Go back to end debugging.\n");
+                int key;
+                int action;
+                do {
+                    key = ui_wait_key();
+                    action = device_handle_key(key, 1);
+                    ui_print("Key: %d\n", key);
+                } while (action != GO_BACK);
+                break;
+			}
+            case 2:
+	            ui_set_background(BACKGROUND_ICON_NONE);
+                ui_printlogtail(32);
+                ui_wait_key();
+                ui_clear_key_queue();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+                break;
+			case 3:
+                ui_clear_text();
+                ui_set_background(BACKGROUND_ICON_CLOCKWORK);
+                break;
+			case 4:
+                partition_sdcard(primary_path);
+                break;
+			case 5:
+                partition_sdcard(extra_path);
+                break;			
+#ifdef ENABLE_LOKI
+            case 6:
+                toggle_loki_support();
+                break;
+#endif		           
+        }
+    }
+}
+
+#endif /* USE_CWM_GRAPHICS */
 
 void write_fstab_root(char *path, FILE *file) {
     Volume *vol = volume_for_path(path);
@@ -2590,8 +2983,12 @@ int verify_root_and_recovery() {
     if (0 != lstat("/system/etc/.installed_su_daemon", &st)) {
         if (0 == lstat("/system/etc/install-recovery.sh", &st)) {
             if (st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) {
-		        ui_show_text(1);		        
-		        if (confirm_selection("ROM may flash stock recovery on boot. Fix?", "Yes - Disable recovery flash")) {
+		        ui_show_text(1);
+#ifdef USE_CWM_GRAPHICS
+		        if (confirm_selection("ROM may flash stock recovery on boot. Fix?", "Yes -- disable recovery flash")) {
+#else
+                        if (confirm_selection("ROM may flash stock recovery on boot. Fix?", "Yes - Disable recovery flash")) {
+#endif
                     __system("chmod -x /system/etc/install-recovery.sh");
                     ret = 1;
                 }

@@ -20,6 +20,7 @@ int user_cancel_nandroid(FILE **fp, const char* backup_file_image, int is_backup
 void nandroid_force_backup_format(const char* fmt);
 unsigned int nandroid_get_default_backup_format();
 
+#ifdef USE_CWM_GRAPHICS
 unsigned long long Backup_Size;
 unsigned long long Used_Size;
 unsigned long long Before_Used_Size;
@@ -28,6 +29,7 @@ unsigned long long Free_Size;
 void ui_increment_frame();
 
 #define ui_nice_print(...) { ui_set_nice(1); ui_print(__VA_ARGS__); ui_set_nice(0); }
+#endif /* USE_CWM_GRAPHICS */
 
 #define NANDROID_HIDE_PROGRESS_FILE  "clockworkmod/.hidenandroidprogress"
 #define NANDROID_BACKUP_FORMAT_FILE  "clockworkmod/.default_backup_format"

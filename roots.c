@@ -876,15 +876,22 @@ int setup_encrypted_data() {
 	}
 		
 	if (ret == 0) {
+#ifdef USE_CWM_GRAPHICS
 		ui_print("Data successfuly decrypted and mounted!\n");
+#else
+		ui_print("[*] Data successfuly decrypted and mounted!\n");
+#endif
 		if (!data_is_decrypted) { 
 			data_is_decrypted = 1; 
 		}
 		encrypted_data_mounted = 1;
 		return 0;
 	}
-	
+#ifdef USE_CWM_GRAPHICS
 	ui_print("Data couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
+#else
+    ui_print("[!] Data couldn't be decrypted and mounted. Please restart recovery from Power Menu.\n");
+#endif
 	return 1;	
 }
 

@@ -382,7 +382,11 @@ static int erase_volume(const char *volume) {
         }
     }
 
+#ifdef USE_CWM_GRAPHICS
     ui_print("formatting %s...\n", volume);
+#else
+    ui_print("[*] formatting %s...\n", volume);
+#endif
 
     ensure_path_unmounted(volume);
     int result = format_volume(volume);
@@ -647,10 +651,13 @@ void wipe_preflash(int confirm) {
 	ui_print("Dalvik Cache wiped.\n");
 	if (!is_encrypted_data()) ensure_path_unmounted("/data");
 	if (volume_for_path("/sd-ext") != NULL) ensure_path_unmounted("/sd-ext"); 
+#ifdef USE_CWM_GRAPHICS
 	ui_print("\nPreflash wipe complete. Don't reboot to Android right now with \"reboot system now\" --first option in menu, because there is no system files in it. Either flash a new ROM or restore a backup to avoid troubles!!!.\n");
-	sleep(1);   
+#else
+	ui_print("\nPreflash wipe complete. Don't reboot to Android right now with \"Reboot phone\" --first option in menu, because there is no system files in it. Either flash a new ROM or restore a backup to avoid troubles!!!.\n");
+#endif
+        sleep(1);
 }
-
 void wipe_data(int confirm) {
 	
 	if (confirm && !confirm_selection("Confirm wipe all user data?", "Yes - Wipe All Data"))
@@ -840,7 +847,11 @@ static void prompt_and_wait(int status) {
             case ITEM_ADVANCED:
                 show_advanced_menu();
                 break;
-                
+#ifndef USE_CWM_GRAPHICS
+            case ITEM_CARLIV:
+                show_carliv_menu();
+                break;  
+#endif
             case ITEM_POWER:
                 show_power_menu();
                 break;  
@@ -961,8 +972,12 @@ int main(int argc, char **argv) {
 
     device_ui_init(&ui_parameters);
     ui_init();
+#ifdef USE_CWM_GRAPHICS
     ui_print(EXPAND(RECOVERY_VERSION)"\n");
-
+#else
+    ui_print(EXPAND(RECOVERY_VERSION)" * "EXPAND(RECOVERY_DEVICE)"\n");
+    ui_print("Compiled by "EXPAND(RECOVERY_BUILD_USER)"@"EXPAND(RECOVERY_BUILD_HOST)" on: "EXPAND(RECOVERY_BUILD_DATE)"\n");
+#endif
     load_volume_table();
     encrypted_data_mounted = 0;
 	data_is_decrypted = 0;
@@ -1089,6 +1104,9 @@ int main(int argc, char **argv) {
         signature_check_enabled = 0;
         md5_check_enabled = 0;
         script_assert_enabled = 0;
+#ifndef USE_CWM_GRAPHICS
+        ui_get_rainbow_mode = 0; 
+#endif
         is_user_initiated_recovery = 1;
         if (!headless) {
             ui_set_show_text(1);

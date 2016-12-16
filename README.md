@@ -4,24 +4,20 @@
 This is a fork of the Carliv Touch Recovery by Bluefirebird (ex Carliv) with ClockworkMod GUI
 
 So, what does this fork offers?
-1) ClockworkMod Background (https://github.com/DeadSquirrel01/carliv_touch_recovery_new/blob/cm-12.1/res/images/stitch.png)
-2) Replaced CTR images with ClockworkMod ones (https://github.com/DeadSquirrel01/carliv_touch_recovery_new/tree/cm-12.1/res/images)
+1) ClockworkMod Background (https://github.com/DeadSquirrl01/carliv_touch_recovery_new/blob/cm-12.1/images/stitch.png)
+2) Replaced CTR images with ClockworkMod ones (https://github.com/DeadSquirrl01/carliv_touch_recovery_new/tree/cm-12.1/images)
 3) Changed text color in blue which become white when highlighting, like ClockworkMod
 4) Modified menu background color to a darker one, like ClockworkMod
 5) Moved "Carliv Menu" options in "advanced" menu, still like the ClockworkMod Recovery
 6) Show files which are being backed up and/or being restored in real time (feature present in CWM but not in CTR)
-7) Removed some caps from options and rename some of them according to CWM ones
-8) Removed:
+6) Removed some caps from options and rename some of them with CWM original names
+6) Removed:
    _ Rainbow mode
    _ VirtualKeys
    _ Battery Percentage Display (and "reset battery stats option from "advanced" menu)
    Well, I know they are very good and useful, but we want to modify the recovery to looks like the ClockworkMod, so, since these thing weren't present in CWM, I've deleted them, to make the recovery to looks like the CWM, but I kept this recovery's features like mount, backup USB OTG, flash recovery or boot images, install multiple zips... which do not modify the GUI like the ones I've removed
 
 <b>Important</b>: I suggest you to use custom font, since the default one is a bit smaller than the ClockworkMod one (or at least in 720x1280 resolution)
-
-Also if you want to add sdcard partition feature just add in your BoardConfig.mk the following:
-CWM_PARTITION_SDCARD := true
-Thats because in some devices like mine it caused some problems, so use that flag if you want to include it.
 
 <big><b>Carliv porting guide and CTR features:<big><b>
 
