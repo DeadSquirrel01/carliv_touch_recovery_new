@@ -502,7 +502,16 @@ void draw_menu() {
         if (show_menu) {			
 #ifdef USE_CWM_GRAPHICS
             if (menu_sel >= menu_show_start && menu_sel < menu_show_start + max_menu_rows - menu_top) {
-                gr_color(MENU_HIGHLIGHT_COLOR);
+                if(menu_color == 1)              // Time put menu_color variable in action
+                gr_color(MENU_HIGHLIGHT_BLUE);   // After defined one value for the variable for each button,
+                else if(menu_color == 2)         // it will change the menu color according to the variable value.
+                gr_color(MENU_HIGHLIGHT_GREEN);  // EX: in menu_color_change function we assigned value 2 for Green Button
+                else if(menu_color == 3)         // so, here, if menu_color variable = 2 [if else(menu_color == 2)] We will use
+                gr_color(MENU_HIGHLIGHT_ORANGE); // green color, to draw the menu, and if then I press the orange button, the
+                else                             // variable will value 3, according to menu_color variable function, and then
+                gr_color(MENU_HIGHLIGHT_BLUE);   // it will use orange to draw the menu. If no buttons are pressed we will use
+                                                 // blue color [else gr_color(MENU_HIGHLIGHT_BLUE);]
+
                 gr_fill(0, ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 1, gr_fb_width(), (menu_top + menu_sel - menu_show_start + 1) * MENU_TOTAL_HEIGHT);
 				gr_fill(0, (menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT, gr_fb_width(), ((menu_top + menu_sel - menu_show_start) * MENU_TOTAL_HEIGHT) + 2);
             }
@@ -544,7 +553,14 @@ void draw_menu() {
 					gr_color(MENU_SEPARATOR_COLOR);
 					gr_fill(0, ((i - menu_show_start) * MENU_TOTAL_HEIGHT),
 							gr_fb_width(), ((i - menu_show_start) * MENU_TOTAL_HEIGHT) + 1);
-                    gr_color(MENU_TEXT_COLOR);
+                    if(menu_color == 1)
+                            gr_color(MENU_TEXT_BLUE);  // same as
+                   else if(menu_color == 2)            // before
+                            gr_color(MENU_TEXT_GREEN);
+                   else if(menu_color == 3)
+                            gr_color(MENU_TEXT_ORANGE);
+                   else
+                            gr_color(MENU_TEXT_BLUE);
                     draw_text_line(i - menu_show_start, menu[i], MENU_TOTAL_HEIGHT, LEFT_ALIGN);
                 }
                 row++;
@@ -553,7 +569,14 @@ void draw_menu() {
             }
 
 #ifdef USE_CWM_GRAPHICS
-            gr_color(MENU_TEXT_COLOR); // (blue)
+                    if(menu_color == 1)
+                            gr_color(MENU_TEXT_BLUE); // same as
+                   else if(menu_color == 2)           // before
+                            gr_color(MENU_TEXT_GREEN);
+                   else if(menu_color == 3)
+                            gr_color(MENU_TEXT_ORANGE);
+                   else
+                            gr_color(MENU_TEXT_BLUE);
 #else
             gr_color(242, 38, 19, 255); // (red)
 #endif

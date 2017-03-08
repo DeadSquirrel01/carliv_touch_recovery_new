@@ -67,6 +67,7 @@
 #include "fuse_sdcard_provider.h"
 
 extern struct selabel_handle *sehandle;
+int menu_color; // Ititialize menu_color variable. We'll need it later for change menu color
 
 // Prototypes of private functions that are used before defined
 static void show_choose_zip_menu(const char *mount_point);
@@ -2523,6 +2524,42 @@ static int default_aromafm(const char* aromafm_path) {
 }
 
 #ifdef USE_CWM_GRAPHICS
+/* Create the buttons for change menu color.
+ * We assign 3 values to the variable, one
+ * for each color, so that if pressed Orange
+ * Button, it will value is 3, if pressed the Green
+ * Button, the variable will value 2 and if pressed
+ * the Blue one the variable will value 1
+ */
+static void menu_color_change() {
+    const char* headers[] = {  "Select Color", NULL };
+
+    char* carliv_list[] = { "Blue",
+                            "Green",
+                            "Orange",
+                            NULL,
+                            NULL
+    };
+    for (;;)
+    {
+		int chosen_item = get_menu_selection(headers, carliv_list, 0, 0);
+        if (chosen_item == GO_BACK || chosen_item == REFRESH)
+            break;
+		switch (chosen_item)
+        {
+			case 0:
+			    menu_color = 1;
+			    break;
+			case 1:
+			    menu_color = 2;
+			    break;
+			case 2:
+			     menu_color = 3;
+			break;
+		}
+	}
+}
+
 void show_advanced_menu() {
 	char* primary_path = get_primary_storage_path();
     char* extra_path = get_extra_storage_path();
@@ -2537,6 +2574,7 @@ void show_advanced_menu() {
                             "aroma file manager",
 	                    "about",
 		            "flash boot or recovery images",
+                            "change menu color",
                             NULL,
                             NULL,
                             NULL,
@@ -2548,20 +2586,20 @@ void show_advanced_menu() {
     if (num_extra_volumes != 0) {
 		if (extra_path != NULL) {
 		    if (can_partition(extra_path)) 
-			    list[7] = "partition extrasd";
+			    list[8] = "partition extrasd";
 		}
 	}
     if (primary_path != NULL) {
             if (can_partition(primary_path)) 
-                    list[8] = "partition sdcard";
+                    list[9] = "partition sdcard";
         }
 
 #ifdef ENABLE_LOKI
-		list[9] = "toggle loki support";
+		list[10] = "toggle loki support";
 #endif
 
 #ifdef BOARD_HAS_MTK_CPU
-		list[10] = "special mtk partitions menu";
+		list[11] = "special mtk partitions menu";
 #endif
 
     for (;;)
@@ -2634,24 +2672,27 @@ void show_advanced_menu() {
              case 6:
                 show_flash_image_menu();
 				break;
-			case 7:
+            case 7:
+                menu_color_change(); // It will show the 3 buttons for changing the menu color, corresponding to menu_color_change function
+                break;
+			case 8:
                 partition_sdcard(extra_path);
                 break;
-                        case 8:
+                        case 9:
                 partition_sdcard(primary_path);
                 break;
 #ifdef ENABLE_LOKI
-            case 9:
+            case 10:
                 toggle_loki_support();
                 break;
 #endif
 #ifdef BOARD_HAS_MTK_CPU
-			case 10:
+			case 11:
                 show_mtk_special_backup_restore_menu();
                 break;
 #endif				
         }
-    }    
+    }
 }
 #else /* USE_CWM_GRAPHICS */
 void show_carliv_menu() {
@@ -2735,7 +2776,7 @@ void show_carliv_menu() {
                 break;
 #endif				
         }
-    }    
+    }
 }
 
 void show_advanced_menu() {
@@ -2808,12 +2849,12 @@ void show_advanced_menu() {
                 break;
 			case 5:
                 partition_sdcard(extra_path);
-                break;			
+                break;
 #ifdef ENABLE_LOKI
             case 6:
                 toggle_loki_support();
                 break;
-#endif		           
+#endif    		
         }
     }
 }

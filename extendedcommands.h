@@ -46,9 +46,11 @@ void wipe_data(int confirm);
 void wipe_cache(int confirm);
 void wipe_dalvik_cache(int confirm);
 #ifndef USE_CWM_GRAPHICS
-void wipe_battery_stats(int confirm); 
+void wipe_battery_stats(int confirm);
 void show_carliv_menu();
 void toggle_rainbow();
+#else
+extern int menu_color; // We need this variable also in ui.c so make it extern!
 #endif
 void show_wipe_menu();
 void show_multi_flash_menu();
