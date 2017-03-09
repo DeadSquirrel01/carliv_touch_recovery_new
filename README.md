@@ -20,6 +20,13 @@ Features:
 - added support for dencrypting and mounting data partition using the builtin minivold from cyanogenmod with vdc commands - the ideea came from [this post of Lekensteyn](http://forum.xda-developers.com/showpost.php?p=47807114&postcount=2). Tested and working well with text ar hex passwords, and maybe will work with pin too but I don't think it will work with pattern (obviously).
 - there is no included root solution. I choose to do it this way because there is no universal root solution now and someone may end up messing things with a non-working root option. You can flash a zip installer like [Chainfire's SuperSu](http://forum.xda-developers.com/showthread.php?t=1538053) or other solution that may work for your phone.
 
+This fork's features:
+If you want to have the following features you need to add USE_CWM_GRAPHICS := true in your device tree
+- Old CWM Recovery Graphics, including text colors, highlight color, background and images
+- Move "Carliv Menu" to "advanced" menu
+- View files being backed up and/or restored
+- Menu for changing menu color (highlight color and texts color) to 3 different colors: blue (default), orange and green in advanced->change menu color section.
+
 All screenshots are made with my old tool from *[here](http://forum.xda-developers.com/android/development/tool-carlivscreenshot-screenshots-t3075992)* -still working well.
 
 CREDITS:
@@ -85,7 +92,7 @@ Carliv Touch Recovery specific flags:
 - to block an input device use
 - `TOUCH_INPUT_BLACKLIST := "devicename"`
 
-- for compile with CWM GUI (images, text fonts, colors, see files which are being backed up and/or being restored in real time, remove VirtualKeys, rainbow mode, battery percentage show and related options and move "Carliv Menu" options in "advanced"), so use a recovery which is really like CWM (regarding graphics), but with CTR features, use
+- for compile with CWM GUI (images, text fonts, colors, see files which are being backed up and/or being restored in real time, remove VirtualKeys, rainbow mode, battery percentage show and related options and move "Carliv Menu" options in "advanced"), so use a recovery which is really like CWM (regarding graphics), but with CTR features, with a menu for change menu colors (highlight color and text color) use:
 - `USE_CWM_GRAPHICS := true`
 
 For system.prop from device tree:

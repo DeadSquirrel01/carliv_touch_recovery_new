@@ -2623,7 +2623,7 @@ void show_advanced_menu() {
 				ui_set_background(BACKGROUND_ICON_NONE);
 				ui_print(EXPAND(RECOVERY_VERSION)" for "EXPAND(RECOVERY_DEVICE)"\n");
                 ui_print("This is a recovery made by Bluefirebird (ex Carliv) with ClockworkMod base with many improvements from him or other recoveries.\n");
-                ui_print("Modified GUI, to make this recovery look like the ClockworkMod one, by Marco Marcaccini (DeadSquirrel01).\n");
+                ui_print("Modified GUI, to make this recovery look like the ClockworkMod one plus some extra features by Marco Marcaccini (DeadSquirrel01).\n");
 				ui_print("return to menu with any key.\n");
 				ui_wait_key();
                 ui_clear_key_queue();
