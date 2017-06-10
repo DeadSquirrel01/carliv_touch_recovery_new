@@ -41,6 +41,9 @@
 #include "libcrecovery/common.h"
 #include "minuictr/minui.h"
 #include "recovery_ui.h"
+#ifdef USE_CWM_GRAPHICS
+#include "roots.h" // Contains functions to manage menu color config
+#endif
 
 extern int __system(const char *command);
 
@@ -553,6 +556,7 @@ void draw_menu() {
 					gr_color(MENU_SEPARATOR_COLOR);
 					gr_fill(0, ((i - menu_show_start) * MENU_TOTAL_HEIGHT),
 							gr_fb_width(), ((i - menu_show_start) * MENU_TOTAL_HEIGHT) + 1);
+#ifdef USE_CWM_GRAPHICS
                     if(menu_color == 1)
                             gr_color(MENU_TEXT_BLUE);  // same as
                    else if(menu_color == 2)            // before
@@ -561,6 +565,9 @@ void draw_menu() {
                             gr_color(MENU_TEXT_ORANGE);
                    else
                             gr_color(MENU_TEXT_BLUE);
+#else
+                    gr_color(MENU_TEXT_COLOR);
+#endif
                     draw_text_line(i - menu_show_start, menu[i], MENU_TOTAL_HEIGHT, LEFT_ALIGN);
                 }
                 row++;
@@ -629,6 +636,9 @@ static int ui_menu_header_offset() {
 // Should only be called with gUpdateMutex locked.
 static void draw_screen_locked(void) {
     if (!ui_has_initialized) return;
+#ifdef USE_CWM_GRAPHICS
+    color_config_read(); // Reads the config which consist in "color=number" where number is the number corresponding to the color
+#endif                   // (blue 1, green 2, orange 3)
     draw_background_locked(gCurrentIcon);
     draw_progress_locked();
     draw_menu();

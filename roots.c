@@ -898,3 +898,42 @@ int setup_encrypted_data() {
 #endif
 
 /*******************************/
+
+#ifdef USE_CWM_GRAPHICS
+char *cwm_config = "/data/media/0/clockworkmod/cwm_config"; // path of the config
+
+/* This function writes a config in the path defined by cwm_config
+ * with the desidered value. Use: color_config_write(number)
+ * Example: color_config_write(2) will write "color=2" in cwm_config's path
+ */
+int color_config_write(int value){
+FILE *fp = fopen(cwm_config,"w");
+fprintf(fp, "color=%d", value);
+fclose(fp);
+return 0;
+}
+
+/* This function reads the config written by color_config_write(int value) function.
+ * Basically he reads the number after "color=" and assigns the corresponding value
+ * to menu_color variable (from 1 to 3 because we have 3 colors)
+ */
+int color_config_read(){
+int ret;
+int value;
+FILE *fp = fopen(cwm_config,"r");
+if (fp==NULL)
+        return 0;
+else {
+     ret = fscanf(fp, "color=%d", &value);
+         if (ret != 1) exit(1);
+         if (value == 1)
+        	menu_color = 1;
+			else if (value == 2)
+				menu_color = 2;
+					else if (value == 3)
+						menu_color = 3;
+     }
+fclose(fp);
+return 0;
+}
+#endif

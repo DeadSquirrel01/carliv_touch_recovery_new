@@ -69,4 +69,9 @@ int setup_install_mounts();
 int encrypted_data_mounted;
 int data_is_decrypted;
 
+#ifdef USE_CWM_GRAPHICS
+int color_config_write(int value);
+int color_config_read();
+#endif
+
 #endif  // RECOVERY_ROOTS_H_

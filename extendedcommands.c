@@ -2548,13 +2548,13 @@ static void menu_color_change() {
 		switch (chosen_item)
         {
 			case 0:
-			    menu_color = 1;
+			    color_config_write(1); // Writes color=1 in the config
 			    break;
 			case 1:
-			    menu_color = 2;
+			    color_config_write(2); // Writes color=2 in the config
 			    break;
 			case 2:
-			     menu_color = 3;
+			    color_config_write(3); // Writes color=3 in the config
 			break;
 		}
 	}
